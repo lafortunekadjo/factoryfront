@@ -281,9 +281,22 @@ import { QuartRecord, ProductionLine, Product, ShiftConfig, StopType } from '../
                                   (click)="setPresenceInQuart(i, false)">✗</button>
                         </div>
                       } @else {
-                        <span class="pp-status" [class.present]="ligne.present" [class.absent]="!ligne.present">
-                          {{ ligne.present ? '✓ Présent' : '✗ Absent' }}
-                        </span>
+                        <div class="pp-locked-row">
+                          <span class="pp-status" [class.present]="ligne.present" [class.absent]="!ligne.present">
+                            {{ ligne.present ? '✓' : '✗' }}
+                          </span>
+                          <!-- Note 5S inline — uniquement pour les opérateurs machine présents -->
+                          @if (ligne.present && ligne.isMachineOp) {
+                            <div class="note5s-inline">
+                              <input class="note5s-input"
+                                     type="number" min="0" max="10"
+                                     [value]="getNoteForMembre(ligne.membreId)"
+                                     (change)="setNote5sForMembre(ligne.membreId, $event)"
+                                     placeholder="—" />
+                              <span class="note5s-max">/10</span>
+                            </div>
+                          }
+                        </div>
                       }
                     </div>
                   }
@@ -337,6 +350,18 @@ import { QuartRecord, ProductionLine, Product, ShiftConfig, StopType } from '../
                   @if (activePresenceSheet()!.locked && presenceForm.length === 0) {
                     <div class="center-msg" style="padding:8px 0;font-size:12px;">
                       Aucun membre d'équipe trouvé pour cette ligne
+                    </div>
+                  }
+
+                  <!-- Enregistrer les notes 5S si des opérateurs machine sont présents -->
+                  @if (activePresenceSheet()!.locked && hasMachineOperators()) {
+                    <div class="n5s-save-bar">
+                      <span class="n5s-hint">⭐ Notes 5S remplies : {{ notedCount5s() }}/{{ machineOperatorsCount() }}</span>
+                      <button class="btn-save-5s"
+                              [disabled]="submitting5s() || notedCount5s() === 0"
+                              (click)="submit5sNotesInQuart(record.id)">
+                        {{ submitting5s() ? '⏳...' : '💾 Enregistrer les notes' }}
+                      </button>
                     </div>
                   }
                 }
@@ -495,6 +520,21 @@ import { QuartRecord, ProductionLine, Product, ShiftConfig, StopType } from '../
     }
     .btn-validate-presence:disabled { opacity: 0.4; cursor: not-allowed; }
 
+    /* Note 5S inline */
+    .pp-locked-row { display: flex; align-items: center; gap: 8px; }
+    .note5s-inline { display: flex; align-items: center; gap: 3px; margin-left: 4px; }
+    .note5s-input {
+      width: 44px; height: 28px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--bg-card); color: var(--text); text-align: center;
+      font-size: 13px; font-weight: 700; padding: 0 4px;
+    }
+    .note5s-input:focus { border-color: var(--factory-secondary); outline: none; }
+    .note5s-max { font-size: 11px; color: var(--text-muted); }
+    .n5s-save-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+    .n5s-hint { font-size: 12px; color: var(--text-muted); }
+    .btn-save-5s { padding: 6px 14px; border-radius: 8px; border: none; background: var(--factory-secondary); color: #fff; cursor: pointer; font-size: 12px; font-weight: 700; }
+    .btn-save-5s:disabled { opacity: 0.4; cursor: not-allowed; }
+
     /* Ajout manuel membre */
     .pp-add-section { margin: 8px 0; }
     .btn-add-absent { width: 100%; padding: 7px; border: 1px dashed var(--border); border-radius: 8px; background: none; color: var(--text-muted); cursor: pointer; font-size: 12px; }
@@ -525,7 +565,7 @@ export class QuartComponent implements OnInit {
   products = signal<Product[]>([]);
   dayStats = signal<any>(null);
   editingId = signal<string | null>(null);
-
+ private validatedPresenceIds = new Set<string>();
   shifts = this.config.shifts;
   stopTypes = this.config.stopTypes;
   teamLeaders = signal<{id:string; fullName:string}[]>([]);
@@ -667,10 +707,59 @@ export class QuartComponent implements OnInit {
   presenceForm: Array<{
     membreId: string; membreNom: string; posteNom: string;
     present: boolean | null; addedByChef: boolean; note: string;
+    isMachineOp: boolean; note5s: number | null;
   }> = [];
 
   // Ensemble des quart_record_id dont les présences sont déjà validées
-  private validatedPresenceIds = new Set<string>();
+  submitting5s     = signal(false);
+
+  // Map membreId → note (plus simple que tableau indexé)
+  notes5sMap = new Map<string, number | null>();
+
+  getNoteForMembre(membreId: string): number | null {
+    return this.notes5sMap.get(membreId) ?? null;
+  }
+
+  setNote5sForMembre(membreId: string, event: Event) {
+    const val = parseInt((event.target as HTMLInputElement).value, 10);
+    if (!isNaN(val) && val >= 0 && val <= 10) {
+      this.notes5sMap.set(membreId, val);
+    } else {
+      this.notes5sMap.delete(membreId);
+    }
+  }
+
+  hasMachineOperators(): boolean {
+    return this.presenceForm.some(p => p.isMachineOp && p.present === true);
+  }
+
+  machineOperatorsCount(): number {
+    return this.presenceForm.filter(p => p.isMachineOp && p.present === true).length;
+  }
+
+  notedCount5s(): number {
+    return Array.from(this.notes5sMap.values()).filter(v => v !== null).length;
+  }
+
+  score5sColor(score: number): string {
+    if (score >= 8) return '#00C47A';
+    if (score >= 5) return '#FFB700';
+    return '#FF4D6D';
+  }
+
+  submit5sNotesInQuart(recordId: string) {
+    const notes = Array.from(this.notes5sMap.entries())
+      .filter(([, v]) => v !== null)
+      .map(([membreId, note5s]) => ({ membreId, note5s }));
+    if (!notes.length) return;
+    this.submitting5s.set(true);
+    this.http.post(
+      `${environment.apiUrl}/rh/quart/${recordId}/notes-5s`, { notes }
+    ).subscribe({
+      next: () => this.submitting5s.set(false),
+      error: () => this.submitting5s.set(false)
+    });
+  }
 
   openUserSearch() {
     this.showUserSearch.set(true);
@@ -736,6 +825,11 @@ export class QuartComponent implements OnInit {
           present: l.present, addedByChef: l.addedByChef ?? false, note: l.note ?? '',
           isMachineOp: l.isMachineOp ?? false, note5s: l.note5s ?? null
         }));
+        // Initialiser la Map 5S avec les notes déjà enregistrées
+        this.notes5sMap.clear();
+        this.presenceForm
+          .filter(p => p.isMachineOp && p.present === true && p.note5s !== null)
+          .forEach(p => this.notes5sMap.set(p.membreId, p.note5s));
         if (sheet.locked) this.validatedPresenceIds.add(recordId);
         this.loadingPresence.set(false);
       },
@@ -892,7 +986,7 @@ export class QuartComponent implements OnInit {
         this.form = this.emptyForm();
         if (this.shifts().length) this.form.shiftId = this.shifts()[0].id;
         this.loadDayStats(line.id);
-      }, 
+      },
       error: () => this.saving.set(false)
     });
   }

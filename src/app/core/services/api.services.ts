@@ -258,10 +258,8 @@ export class RhApiService extends ApiService {
       `${this.base}/rh/factories/${factoryId}/presences/bilan`, { params: { from, to } });
   }
 
-    submit5sNotes(entryId: string, notes: { membreId: string; note5s: number; commentaire?: string }[]): Observable<any[]> {
+  // Notes 5S
+  submit5sNotes(entryId: string, notes: { membreId: string; note5s: number; commentaire?: string }[]): Observable<any[]> {
     return this.http.post<any[]>(`${this.base}/rh/planning/${entryId}/notes-5s`, { notes });
   }
 }
-
-  // Notes 5S
-
