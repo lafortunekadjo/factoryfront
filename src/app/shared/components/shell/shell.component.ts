@@ -246,7 +246,7 @@ export class ShellComponent {
     { id: 'maintenance', icon: '🛠️', label: 'Maintenance', shortLabel: 'Maint.',   route: '/maintenance',  module: 'maintenance',  permission: 'MAINTENANCE_READ' },
     { id: 'siroperie',   icon: '🧪', label: 'Siroperie',   shortLabel: 'Sirop',    route: '/siroperie',    module: 'siroperie',    permission: 'SIROPERIE_READ' },
     { id: 'bilan',       icon: '📊', label: 'Bilan',       shortLabel: 'Bilan',    route: '/bilan',        module: 'bilan',        permission: 'BILAN_READ' },
-    { id: 'rh',          icon: '👥', label: 'RH',          shortLabel: 'RH',       route: '/rh',           permission: 'EQUIPES_READ' },
+    { id: 'rh',          icon: '👥', label: 'RH',          shortLabel: 'RH',       route: '/rh' },
     { id: 'presence',    icon: '✅', label: 'Présences',   shortLabel: 'Présen.',  route: '/presence' },
     { id: 'config',      icon: '⚙️', label: 'Config',      shortLabel: 'Config',   route: '/config',       permission: 'CONFIG_WRITE' },
   ];
