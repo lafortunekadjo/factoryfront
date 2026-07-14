@@ -1,0 +1,192 @@
+// ─── Variables usine (injectées dynamiquement par FactoryConfigService) ───────
+:root {
+  --factory-primary:        #1976d2;
+  --factory-secondary:      #00C2FF;
+  --factory-accent:         #FFB700;
+  --factory-primary-light:  #e3f2fd;
+  --factory-primary-dark:   #1565c0;
+  --factory-secondary-light:#e0f7fa;
+
+  // UI
+  --bg-app:     #0A0E1A;
+  --bg-card:    #111827;
+  --bg-card2:   #1a2235;
+  --border:     #1E2538;
+  --text:       #E8EAF0;
+  --text-muted: #6B7A9C;
+
+  // Sévérités
+  --color-success: #00E5A0;
+  --color-warning: #FFB700;
+  --color-danger:  #FF4D6D;
+  --color-info:    #00C2FF;
+
+  // Sévérités maintenance
+  --severity-mineur:   #00E5A0;
+  --severity-majeur:   #FFB700;
+  --severity-critique: #FF4D6D;
+
+  // Status maintenance
+  --status-en-cours:        #FFB700;
+  --status-resolu:          #00E5A0;
+  --status-attente-piece:   #00C2FF;
+  --status-escalade:        #FF4D6D;
+
+  // Layout
+  --nav-height:    64px;
+  --bottom-nav-h:  68px;
+  --sidebar-width: 240px;
+  --border-radius: 12px;
+  --border-radius-sm: 8px;
+}
+
+// Light mode override (si l'utilisateur préfère light)
+[data-theme="light"] {
+  --bg-app:     #F5F7FA;
+  --bg-card:    #FFFFFF;
+  --bg-card2:   #F0F2F5;
+  --border:     #E0E5EF;
+  --text:       #1A1F36;
+  --text-muted: #7A8499;
+}
+
+// ─── Reset & Base ─────────────────────────────────────────
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'DM Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg-app);
+  color: var(--text);
+  min-height: 100%;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+// ─── Utilitaires globaux ──────────────────────────────────
+
+// Cards
+.factory-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+// Bouton primaire dynamique (utilise les couleurs usine)
+.btn-factory-primary {
+  background: var(--factory-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  width: 100%;
+
+  &:hover { background: var(--factory-primary-dark); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+// Form inputs mobiles
+.factory-input {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius-sm);
+  color: var(--text);
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s;
+
+  &:focus { border-color: var(--factory-secondary); }
+  &::placeholder { color: var(--text-muted); }
+}
+
+// Labels
+.factory-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+// Badges severity
+.badge-severity {
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+
+
+  // On utilise color-mix pour appliquer la transparence (22%) sur les variables CSS natives
+  &.mineur   { background: color-mix(in srgb, var(--color-success) 22%, transparent); color: var(--severity-mineur); }
+  &.majeur   { background: color-mix(in srgb, var(--color-warning) 22%, transparent); color: var(--severity-majeur); }
+  &.critique { background: color-mix(in srgb, var(--color-danger) 22%, transparent);  color: var(--severity-critique); }
+}
+
+// Progress bars
+.progress-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: var(--factory-primary);
+    transition: width 0.3s ease;
+  }
+}
+
+// Scrollbar discrète
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+// ─── Mobile-first responsive ──────────────────────────────
+// Mobile : < 768px  → bottom nav, full width
+// Tablet : 768px+   → sidebar réduite
+// Desktop: 1024px+  → sidebar complète
+
+@media (max-width: 767px) {
+  .factory-card { padding: 12px; }
+  .btn-factory-primary { padding: 14px 20px; font-size: 16px; }
+  .factory-input { padding: 14px; font-size: 16px; } // Évite le zoom iOS
+}
+
+// Note: le décalage sidebar est géré par .shell-content (margin-left)
+// dans shell.component.ts, pas ici, pour éviter le double espacement.
+
+// ─── Animations ───────────────────────────────────────────
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-in { animation: fadeInUp 0.25s ease forwards; }
+
+// ─── Angular Material overrides ───────────────────────────
+.mat-mdc-form-field {
+  --mdc-filled-text-field-container-color: var(--bg-card2);
+  --mdc-filled-text-field-focus-active-indicator-color: var(--factory-secondary);
+  --mdc-outlined-text-field-focus-outline-color: var(--factory-secondary);
+}
+
+.mat-mdc-snack-bar-container {
+  &.success-snack { --mdc-snackbar-container-color: #00E5A022; }
+  &.error-snack   { --mdc-snackbar-container-color: #FF4D6D22; }
+}

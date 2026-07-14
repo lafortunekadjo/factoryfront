@@ -1,0 +1,31 @@
+{
+  "APP": { "TITLE": "Factory Diagnostic", "LOADING": "Loading..." },
+  "NAV": {
+    "HOME": "Home", "MACHINES": "Machines", "SOUFFLAGE": "Blowing",
+    "QUART": "Shift", "PERTES": "Losses", "MAINTENANCE": "Maintenance",
+    "SIROPERIE": "Syrup", "BILAN": "Report", "CONFIG": "Config"
+  },
+  "AUTH": {
+    "LOGIN": "Sign in", "LOGOUT": "Sign out", "EMAIL": "Email",
+    "PASSWORD": "Password", "INVALID_CREDENTIALS": "Invalid email or password",
+    "CHANGE_PASSWORD": "Change password"
+  },
+  "DASHBOARD": {
+    "TITLE": "Dashboard", "TODAY_PRODUCTION": "Today's production",
+    "MONTH_PRODUCTION": "This month", "LOSSES_TODAY": "Losses today",
+    "OPEN_MAINTENANCE": "Open breakdowns"
+  },
+  "QUART": {
+    "TITLE": "Shift Tracking", "NEW": "New shift", "DATE": "Date",
+    "SHIFT": "Shift", "PRODUCT": "Product", "BOTTLES": "Bottles produced",
+    "PACKS": "Packs produced", "STOPS": "Stop types", "NOTES": "Notes",
+    "SAVE": "Save shift", "SAVED": "Shift saved"
+  },
+  "COMMON": {
+    "SAVE": "Save", "CANCEL": "Cancel", "DELETE": "Delete", "EDIT": "Edit",
+    "BACK": "Back", "LOADING": "Loading...", "NO_DATA": "No data",
+    "CONFIRM_DELETE": "Confirm deletion?", "YES": "Yes", "NO": "No",
+    "SEARCH": "Search", "FILTER": "Filter", "EXPORT": "Export", "SELECT": "Select"
+  },
+  "THEME": "Theme"
+}
