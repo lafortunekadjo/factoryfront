@@ -1,0 +1,125 @@
+{
+  "APP": {
+    "TITLE": "Factory Diagnostic",
+    "LOADING": "Chargement..."
+  },
+  "NAV": {
+    "HOME": "Accueil",
+    "MACHINES": "Machines",
+    "SOUFFLAGE": "Soufflage",
+    "QUART": "Quart",
+    "PERTES": "Pertes",
+    "MAINTENANCE": "Maintenance",
+    "SIROPERIE": "Siroperie",
+    "BILAN": "Bilan",
+    "CONFIG": "Configuration"
+  },
+  "AUTH": {
+    "LOGIN": "Se connecter",
+    "LOGOUT": "Déconnexion",
+    "EMAIL": "Email",
+    "PASSWORD": "Mot de passe",
+    "INVALID_CREDENTIALS": "Email ou mot de passe incorrect",
+    "CHANGE_PASSWORD": "Changer le mot de passe"
+  },
+  "DASHBOARD": {
+    "TITLE": "Tableau de bord",
+    "TODAY_PRODUCTION": "Production aujourd'hui",
+    "MONTH_PRODUCTION": "Production ce mois",
+    "LOSSES_TODAY": "Pertes aujourd'hui",
+    "OPEN_MAINTENANCE": "Pannes ouvertes"
+  },
+  "MACHINES": {
+    "TITLE": "Diagnostic Machines",
+    "SELECT_LINE": "Sélectionne ta ligne",
+    "SYMPTOMS": "Pannes",
+    "FORMATION": "Formation",
+    "SEARCH": "Rechercher un symptôme...",
+    "SYMPTOM": "Symptôme",
+    "CAUSES": "Causes",
+    "ACTIONS": "Actions correctives"
+  },
+  "QUART": {
+    "TITLE": "Suivi de Quart",
+    "NEW": "Nouveau quart",
+    "DATE": "Date",
+    "SHIFT": "Quart",
+    "PRODUCT": "Produit fabriqué",
+    "BOTTLES": "Bouteilles produites",
+    "PACKS": "Packs produits",
+    "STOPS": "Types d'arrêts",
+    "NOTES": "Notes",
+    "SAVE": "Enregistrer le quart",
+    "SAVED": "Quart enregistré"
+  },
+  "PERTES": {
+    "TITLE": "Pertes Préformes",
+    "NEW": "Nouvelle perte",
+    "QUANTITY": "Quantité de préformes perdues",
+    "CAUSE": "Cause principale",
+    "SAVE": "Enregistrer les pertes"
+  },
+  "MAINTENANCE": {
+    "TITLE": "Maintenance Méca / Élec",
+    "TYPE_MECA": "Mécanique",
+    "TYPE_ELEC": "Électrique",
+    "SEVERITY_MINEUR": "Mineur",
+    "SEVERITY_MAJEUR": "Majeur",
+    "SEVERITY_CRITIQUE": "Critique",
+    "STATUS_EN_COURS": "En cours",
+    "STATUS_RESOLU": "Résolu",
+    "STATUS_ATTENTE": "En attente pièce",
+    "STATUS_ESCALADE": "Escaladé",
+    "DEFECT": "Description de la panne",
+    "CAUSE": "Cause racine",
+    "ACTION": "Action réalisée",
+    "DURATION": "Durée intervention (min)"
+  },
+  "SIROPERIE": {
+    "TITLE": "Siroperie",
+    "INITIAL_VOLUME": "Volume initial tank (L)",
+    "CURRENT_VOLUME": "Volume actuel tank (L)",
+    "BOTTLES_AT_READING": "Bouteilles au relevé",
+    "REMAINING": "Restant",
+    "CONSUMED": "Consommé"
+  },
+  "BILAN": {
+    "TITLE": "Bilan Mensuel",
+    "TOTAL_BOTTLES": "Total bouteilles",
+    "TOTAL_PACKS": "Total packs",
+    "TOTAL_DOWNTIME": "Arrêts cumulés",
+    "TOTAL_LOSSES": "Pertes préformes",
+    "EFFICIENCY": "Efficacité",
+    "BY_PRODUCT": "Par produit",
+    "STOP_BREAKDOWN": "Répartition arrêts",
+    "LOSS_BREAKDOWN": "Répartition pertes"
+  },
+  "CONFIG": {
+    "TITLE": "Configuration",
+    "FACTORY": "Usine",
+    "LINES": "Lignes de production",
+    "SHIFTS": "Tranches de quart",
+    "MACHINES": "Types de machines",
+    "PRODUCTS": "Produits",
+    "USERS": "Utilisateurs",
+    "BRANDING": "Branding",
+    "SAVE": "Enregistrer"
+  },
+  "COMMON": {
+    "SAVE": "Enregistrer",
+    "CANCEL": "Annuler",
+    "DELETE": "Supprimer",
+    "EDIT": "Modifier",
+    "BACK": "Retour",
+    "LOADING": "Chargement...",
+    "NO_DATA": "Aucune donnée",
+    "CONFIRM_DELETE": "Confirmer la suppression ?",
+    "YES": "Oui",
+    "NO": "Non",
+    "SEARCH": "Rechercher",
+    "FILTER": "Filtrer",
+    "EXPORT": "Exporter",
+    "SELECT": "Sélectionner"
+  },
+  "THEME": "Thème"
+}

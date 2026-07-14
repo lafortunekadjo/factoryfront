@@ -126,136 +126,19 @@ type RhTab = 'planning' | 'presences' | 'echanges' | 'bilan';
         @if (activeTab() === 'presences') {
           <div class="tab-section">
             <div class="section-title">✅ Validation des présences</div>
-
-            @if (!activeSheet()) {
-              <div class="empty-state">
-                <div style="font-size:40px">👆</div>
-                <p>Cliquez sur un quart dans le planning pour ouvrir la feuille de présence</p>
-                <button class="back-to-planning" (click)="activeTab.set('planning')">
-                  ← Retour au planning
-                </button>
+            <div class="factory-card" style="text-align:center; padding: 32px 20px;">
+              <div style="font-size:48px; margin-bottom:12px;">📋</div>
+              <div style="font-size:15px; font-weight:700; margin-bottom:8px;">
+                La validation des présences se fait depuis le module Quart
               </div>
-            } @else {
-              <div class="sheet-header factory-card">
-                <div>
-                  <div class="sheet-title">{{ activeSheet()!.equipeNom }}</div>
-                  <div class="sheet-meta">
-                    {{ activeSheet()!.date | date:'EEEE dd MMMM yyyy':'':'fr' }}
-                    · {{ activeSheet()!.shiftName }}
-                  </div>
-                </div>
-                @if (activeSheet()!.locked) {
-                  <span class="badge-locked">🔒 Validé</span>
-                }
+              <div style="font-size:13px; color:var(--text-muted); margin-bottom:20px;">
+                Ouvrez une fiche de quart, cliquez sur <strong>👥 Présences</strong>
+                pour valider l'équipe de ce quart.
               </div>
-
-              <div class="presence-list">
-                @for (ligne of presenceForm; track ligne.membreId; let i = $index) {
-                  <div class="presence-row factory-card" [class.absent]="ligne.present === false">
-                    <div class="pr-info">
-                      <div class="pr-name">{{ ligne.membreNom }}</div>
-                      <div class="pr-poste">{{ ligne.posteNom }}</div>
-                    </div>
-                    <div class="pr-actions">
-                      @if (ligne.addedByChef) {
-                        <span class="badge-chef-added">+ Chef</span>
-                      }
-                      <button class="btn-present" [class.active]="ligne.present === true"
-                              [disabled]="activeSheet()!.locked"
-                              (click)="setPresence(i, true)">✓ Présent</button>
-                      <button class="btn-absent" [class.active]="ligne.present === false"
-                              [disabled]="activeSheet()!.locked"
-                              (click)="setPresence(i, false)">✗ Absent</button>
-                    </div>
-                  </div>
-                }
-
-                <!-- Ajouter un absent manuel -->
-                @if (!activeSheet()!.locked) {
-                  <div class="add-absent-section">
-                    <button class="btn-add-absent" (click)="showAddAbsent.set(!showAddAbsent())">
-                      + Ajouter un membre absent (oubli de signin)
-                    </button>
-                  </div>
-
-                  <div class="validate-actions">
-                    <div class="presence-summary">
-                      {{ presentsCount() }} présent(s) · {{ absentsCount() }} absent(s)
-                    </div>
-                    <button class="btn-factory-primary" (click)="validatePresences()"
-                            [disabled]="validating() || allUndecided()">
-                      {{ validating() ? '⏳...' : '✅ Valider les présences' }}
-                    </button>
-                  </div>
-                }
-
-                <!-- ── NOTATION 5S (après validation) ── -->
-                @if (activeSheet()!.locked && machineOperators().length) {
-                  <div class="notes5s-section">
-                    <div class="notes5s-title">
-                      <span>⭐ Notation 5S — Opérateurs machine</span>
-                      <span class="notes5s-subtitle">Note de propreté et d'ordre /10 par poste</span>
-                    </div>
-
-                    @for (op of machineOperators(); track op.membreId; let i = $index) {
-                      <div class="note5s-card factory-card" [class.noted]="notes5sForm[i].note !== null">
-                        <div class="n5s-header">
-                          <div>
-                            <div class="n5s-name">{{ op.membreNom }}</div>
-                            <div class="n5s-poste">{{ op.posteNom }}</div>
-                          </div>
-                          @if (notes5sForm[i].note !== null) {
-                            <div class="n5s-score" [style.color]="scoreColor(notes5sForm[i].note!)">
-                              {{ notes5sForm[i].note }}<span class="n5s-max">/10</span>
-                            </div>
-                          }
-                        </div>
-
-                        <!-- Curseur de notation -->
-                        <div class="n5s-slider-wrap">
-                          <div class="n5s-labels">
-                            @for (v of [0,1,2,3,4,5,6,7,8,9,10]; track v) {
-                              <button class="n5s-dot"
-                                      [class.active]="notes5sForm[i].note === v"
-                                      [style.background]="notes5sForm[i].note === v ? scoreColor(v) : ''"
-                                      (click)="notes5sForm[i].note = v">
-                                {{ v }}
-                              </button>
-                            }
-                          </div>
-                          <div class="n5s-scale-labels">
-                            <span>Insuffisant</span>
-                            <span>Passable</span>
-                            <span>Bien</span>
-                            <span>Excellent</span>
-                          </div>
-                        </div>
-
-                        <div style="margin-top:8px;">
-                          <input class="factory-input" [(ngModel)]="notes5sForm[i].commentaire"
-                                 placeholder="Observation (optionnel)..." />
-                        </div>
-                      </div>
-                    }
-
-                    <div class="notes5s-footer">
-                      <div class="notes5s-summary">
-                        @if (notedCount() > 0) {
-                          Moyenne : <strong [style.color]="scoreColor(avgScore())">
-                            {{ avgScore() }}/10
-                          </strong>
-                          · {{ notedCount() }}/{{ machineOperators().length }} noté(s)
-                        }
-                      </div>
-                      <button class="btn-factory-primary" (click)="submit5sNotes()"
-                              [disabled]="submitting5s() || notedCount() === 0">
-                        {{ submitting5s() ? '⏳...' : '⭐ Enregistrer les notes 5S' }}
-                      </button>
-                    </div>
-                  </div>
-                }
+              <div style="font-size:12px; color:var(--text-muted);">
+                Le bilan consolidé de toutes les présences est disponible dans l'onglet 📊 Bilan.
               </div>
-            }
+            </div>
           </div>
         }
 

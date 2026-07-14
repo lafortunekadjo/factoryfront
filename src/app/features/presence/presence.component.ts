@@ -11,219 +11,219 @@ import { environment } from '../../../environments/environment';
   imports: [CommonModule, FormsModule, DatePipe],
   template: `
     <div class="presence animate-in">
-      <h2 class="page-title">✅ Feuilles de présence</h2>
+      <h2 class="page-title">✅ Récapitulatif des présences</h2>
 
-      @if (loading()) { <div class="center-msg">Chargement...</div> }
-
-      @if (!loading() && openSheets().length === 0) {
-        <div class="empty-state">
-          <div style="font-size:36px;">✅</div>
-          <p>Aucune feuille de présence en attente</p>
-        </div>
-      }
-
-      @for (sheet of openSheets(); track sheet.id) {
-        <div class="sheet-card factory-card">
-          <div class="sheet-header">
-            <div>
-              <div class="sheet-title" [style.color]="sheet.teamCouleur">
-                {{ sheet.teamNom }} — {{ sheet.shiftName }}
-              </div>
-              <div class="sheet-date">{{ sheet.workDate | date:'EEEE dd MMMM yyyy':'':'fr' }}</div>
-            </div>
-            <div class="sheet-status">
-              <span class="status-badge" [class.validated]="sheet.status === 'VALIDATED'">
-                {{ sheet.status === 'VALIDATED' ? '✅ Validée' : '📋 En cours' }}
-              </span>
-            </div>
+      <div class="filters factory-card">
+        <div class="filter-row">
+          <div>
+            <label class="factory-label">Du</label>
+            <input class="factory-input" type="date" [(ngModel)]="filterFrom" (change)="load()" />
           </div>
+          <div>
+            <label class="factory-label">Au</label>
+            <input class="factory-input" type="date" [(ngModel)]="filterTo" (change)="load()" />
+          </div>
+        </div>
+      </div>
 
-          <!-- Liste membres -->
-          <div class="members-section">
-            @for (record of sheet.records; track record.id) {
-              <div class="record-row" [class]="'statut-' + record.statut.toLowerCase()">
-                <div class="rec-avatar" [class]="'s-' + record.statut.toLowerCase()">
-                  {{ initials(record.fullName) }}
-                </div>
-                <div class="rec-info">
-                  <div class="rec-name">{{ record.fullName }}</div>
-                  <div class="rec-meta">
-                    {{ record.posteNom ?? 'Poste non défini' }}
-                    @if (record.signinAt) { · Signin {{ record.signinAt | date:'HH:mm' }} }
-                    @if (record.addedManually) { · <span class="manual-tag">Ajout manuel</span> }
-                    @if (record.signinDistanceM) { · {{ record.signinDistanceM }}m }
-                  </div>
-                </div>
+      @if (loading()) {
+        <div class="center-msg">⏳ Chargement...</div>
+      } @else if (!recap()) {
+        <div class="empty-state">
+          <div style="font-size:36px">📋</div>
+          <p>Aucune présence enregistrée sur cette période</p>
+        </div>
+      } @else {
+        <div class="kpis">
+          <div class="kpi-card">
+            <div class="kpi-val" style="color:var(--color-success)">{{ recap()!.totalPresents }}</div>
+            <div class="kpi-lbl">Présences</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-val" style="color:var(--color-danger)">{{ recap()!.totalAbsents }}</div>
+            <div class="kpi-lbl">Absences</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-val" [style.color]="tauxColor(recap()!.tauxPresence)">
+              {{ recap()!.tauxPresence }}%
+            </div>
+            <div class="kpi-lbl">Taux global</div>
+          </div>
+        </div>
 
-                @if (sheet.status !== 'VALIDATED') {
-                  <div class="rec-controls">
-                    <select class="statut-select" [value]="record.statut"
-                            (change)="updateStatut(sheet.id, record.teamMemberId, $event, sheet)">
-                      <option value="PRESENT">✅ Présent</option>
-                      <option value="ABSENT">❌ Absent</option>
-                      <option value="LATE">⏰ Retard</option>
-                      <option value="EXCUSED">📝 Excusé</option>
-                    </select>
+        <div class="view-toggle">
+          <button class="vt-btn" [class.active]="view() === 'quart'" (click)="view.set('quart')">
+            📋 Par quart
+          </button>
+          <button class="vt-btn" [class.active]="view() === 'membre'" (click)="view.set('membre')">
+            👤 Par membre
+          </button>
+        </div>
+
+        @if (view() === 'quart') {
+          @if (!recap()!.parQuart.length) {
+            <div class="empty-state"><p>Aucun quart avec présences validées sur cette période</p></div>
+          }
+          @for (q of recap()!.parQuart; track q.date + q.equipeNom) {
+            <div class="quart-card factory-card">
+              <div class="qc-header">
+                <div>
+                  <div class="qc-date">
+                    {{ q.date | date:'EEE dd MMM':'':'fr' }}
+                    <span class="qc-shift">· {{ q.shiftName }}</span>
                   </div>
-                } @else {
-                  <div class="rec-statut-badge" [class]="'s-' + record.statut.toLowerCase()">
-                    {{ statutLabel(record.statut) }}
+                  <div class="qc-equipe">{{ q.equipeNom }}</div>
+                </div>
+                <div class="qc-score" [style.color]="tauxColor(q.nbPresents / q.nbTotal * 100)">
+                  <span class="score-big">{{ q.nbPresents }}</span>/{{ q.nbTotal }}
+                </div>
+              </div>
+              <div class="membres-list">
+                @for (m of q.lignes; track m.membreId) {
+                  <div class="membre-row" [class.absent]="m.present === false">
+                    <span class="dot" [class.green]="m.present === true"
+                          [class.red]="m.present === false"
+                          [class.grey]="m.present === null">
+                      {{ m.present === true ? '✓' : m.present === false ? '✗' : '?' }}
+                    </span>
+                    <span class="mr-name">{{ m.membreNom }}</span>
+                    <span class="mr-poste">{{ m.posteNom }}</span>
+                    @if (m.addedByChef) {
+                      <span class="badge-chef">+ chef</span>
+                    }
+                    @if (m.note5s !== null && m.note5s !== undefined) {
+                      <span class="badge-5s" [style.color]="score5sColor(m.note5s)">
+                        ⭐{{ m.note5s }}/10
+                      </span>
+                    }
                   </div>
                 }
               </div>
-            }
+            </div>
+          }
+        }
+
+        @if (view() === 'membre') {
+          <div class="table-wrap factory-card">
+            <table class="recap-table">
+              <thead>
+                <tr>
+                  <th>Membre</th><th>Poste</th><th>Équipe</th>
+                  <th class="center">✓</th><th class="center">✗</th><th>Taux</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (m of recap()!.parMembre; track m.membreId) {
+                  <tr>
+                    <td class="td-name">{{ m.membreNom }}</td>
+                    <td class="td-muted">{{ m.posteNom }}</td>
+                    <td><span class="equipe-tag">{{ m.equipeNom }}</span></td>
+                    <td class="center td-pres">{{ m.presents }}</td>
+                    <td class="center td-abs">{{ m.absents }}</td>
+                    <td>
+                      <div class="taux-bar">
+                        <div class="taux-fill" [style.width]="m.tauxPresence + '%'"
+                             [style.background]="tauxColor(m.tauxPresence)"></div>
+                        <span class="taux-lbl">{{ m.tauxPresence }}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
           </div>
-
-          <!-- Ajout manuel -->
-          @if (sheet.status !== 'VALIDATED') {
-            <div class="manual-section">
-              <div class="manual-title">➕ Ajouter un membre absent du signin</div>
-              <div class="manual-form">
-                <select class="factory-input" [(ngModel)]="manualMemberId[sheet.id]">
-                  <option value="">-- Sélectionner un membre --</option>
-                  @for (m of absentMembers(sheet); track m.teamMemberId) {
-                    <option [value]="m.teamMemberId">{{ m.fullName }}</option>
-                  }
-                </select>
-                <input class="factory-input" [(ngModel)]="manualNote[sheet.id]" placeholder="Note (optionnel)" />
-                <button class="btn-manual" [disabled]="!manualMemberId[sheet.id]"
-                        (click)="addManual(sheet)">Ajouter</button>
-              </div>
-            </div>
-
-            <!-- Résumé avant validation -->
-            <div class="sheet-summary">
-              <span class="sum-present">✅ {{ countByStatut(sheet, 'PRESENT') }} présents</span>
-              <span class="sum-absent">❌ {{ countByStatut(sheet, 'ABSENT') }} absents</span>
-              <span class="sum-late">⏰ {{ countByStatut(sheet, 'LATE') }} retards</span>
-              <span class="sum-excused">📝 {{ countByStatut(sheet, 'EXCUSED') }} excusés</span>
-            </div>
-
-            <button class="btn-validate" (click)="validateSheet(sheet)">
-              ✅ Valider la feuille de présence
-            </button>
-          }
-
-          @if (sheet.status === 'VALIDATED') {
-            <div class="validated-info">
-              Validée par {{ sheet.validatedByName }} le {{ sheet.validatedAt | date:'dd/MM/yyyy à HH:mm' }}
-            </div>
-          }
-        </div>
+        }
       }
     </div>
   `,
   styles: [`
-    .presence { max-width: 700px; margin: 0 auto; padding-bottom: 40px; }
-    .page-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
-
-    .sheet-card { margin-bottom: 16px; }
-    .sheet-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
-    .sheet-title { font-size: 16px; font-weight: 700; }
-    .sheet-date { font-size: 13px; color: var(--text-muted); margin-top: 2px; text-transform: capitalize; }
-    .status-badge { padding: 4px 12px; border-radius: 10px; font-size: 12px; font-weight: 700; background: var(--color-warning); color: #000; }
-    .status-badge.validated { background: var(--color-success); color: #fff; }
-
-    /* Membres */
-    .members-section { margin-bottom: 14px; }
-    .record-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
-    .record-row:last-child { border-bottom: none; }
-    .rec-avatar {
-      width: 38px; height: 38px; border-radius: 50%; background: var(--factory-primary);
-      color: #fff; display: flex; align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 700; flex-shrink: 0;
-    }
-    .rec-avatar.s-present { background: var(--color-success); }
-    .rec-avatar.s-absent  { background: var(--color-danger); }
-    .rec-avatar.s-late    { background: var(--color-warning); color: #000; }
-    .rec-avatar.s-excused { background: var(--text-muted); }
-    .rec-info { flex: 1; }
-    .rec-name { font-size: 14px; font-weight: 600; color: var(--text); }
-    .rec-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-    .manual-tag { background: #FFB70022; color: var(--color-warning); border: 1px solid #FFB70044; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; }
-    .statut-select { padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card2); color: var(--text); font-size: 12px; }
-    .rec-statut-badge { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; }
-    .rec-statut-badge.s-present { background: #00E5A022; color: var(--color-success); }
-    .rec-statut-badge.s-absent  { background: #FF4D6D22; color: var(--color-danger); }
-    .rec-statut-badge.s-late    { background: #FFB70022; color: var(--color-warning); }
-    .rec-statut-badge.s-excused { background: var(--bg-card2); color: var(--text-muted); }
-
-    /* Ajout manuel */
-    .manual-section { background: var(--bg-card2); border: 1px dashed var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
-    .manual-title { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 10px; }
-    .manual-form { display: flex; gap: 8px; flex-wrap: wrap; }
-    .btn-manual { padding: 8px 16px; border-radius: 6px; border: none; background: var(--factory-secondary); color: #fff; cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap; }
-    .btn-manual:disabled { opacity: 0.4; cursor: not-allowed; }
-
-    /* Résumé & Validation */
-    .sheet-summary { display: flex; gap: 14px; font-size: 13px; font-weight: 600; margin-bottom: 14px; flex-wrap: wrap; }
-    .sum-present { color: var(--color-success); }
-    .sum-absent  { color: var(--color-danger); }
-    .sum-late    { color: var(--color-warning); }
-    .sum-excused { color: var(--text-muted); }
-    .btn-validate { width: 100%; padding: 12px; border-radius: 10px; border: none; background: var(--color-success); color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; }
-    .validated-info { font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; margin-top: 10px; }
-
+    .presence { max-width: 800px; margin: 0 auto; padding-bottom: 40px; }
+    .page-title { font-size: 18px; font-weight: 700; margin-bottom: 14px; }
+    .filters { margin-bottom: 14px; }
+    .filter-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .filter-row > div { flex: 1; min-width: 140px; }
+    .kpis { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+    .kpi-card { flex: 1; min-width: 90px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
+    .kpi-val { font-size: 26px; font-weight: 900; }
+    .kpi-lbl { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+    .view-toggle { display: flex; gap: 6px; margin-bottom: 14px; }
+    .vt-btn { padding: 7px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card2); color: var(--text-muted); cursor: pointer; font-size: 13px; font-weight: 500; }
+    .vt-btn.active { background: var(--factory-primary); color: #fff; border-color: transparent; font-weight: 700; }
+    .quart-card { margin-bottom: 10px; }
+    .qc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .qc-date { font-size: 14px; font-weight: 700; text-transform: capitalize; }
+    .qc-shift { font-weight: 400; color: var(--text-muted); font-size: 13px; }
+    .qc-equipe { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .qc-score { font-size: 15px; font-weight: 600; text-align: right; }
+    .score-big { font-size: 28px; font-weight: 900; }
+    .membres-list { display: flex; flex-direction: column; gap: 4px; }
+    .membre-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 7px; background: var(--bg-card2); font-size: 13px; }
+    .membre-row.absent { background: #FF4D6D08; }
+    .dot { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; flex-shrink: 0; }
+    .dot.green { background: #00E5A022; color: var(--color-success); }
+    .dot.red { background: #FF4D6D22; color: var(--color-danger); }
+    .dot.grey { background: var(--bg-card); color: var(--text-muted); }
+    .mr-name { font-weight: 600; flex: 1; }
+    .mr-poste { font-size: 11px; color: var(--text-muted); }
+    .badge-chef { font-size: 10px; background: #FFB70022; border: 1px solid #FFB70044; color: var(--color-warning); padding: 1px 6px; border-radius: 6px; }
+    .badge-5s { font-size: 11px; font-weight: 700; }
+    .table-wrap { overflow-x: auto; }
+    .recap-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .recap-table th { text-align: left; padding: 10px 12px; font-size: 11px; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+    .recap-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    .recap-table tbody tr:last-child td { border-bottom: none; }
+    .center { text-align: center; }
+    .td-name { font-weight: 600; }
+    .td-muted { color: var(--text-muted); }
+    .td-pres { color: var(--color-success); font-weight: 700; }
+    .td-abs { color: var(--color-danger); font-weight: 700; }
+    .equipe-tag { background: var(--bg-card2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px; font-size: 11px; }
+    .taux-bar { position: relative; background: var(--bg-card2); border-radius: 4px; height: 20px; min-width: 80px; overflow: hidden; }
+    .taux-fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 4px; opacity: 0.4; }
+    .taux-lbl { position: relative; font-size: 11px; font-weight: 700; padding: 2px 6px; }
     .center-msg, .empty-state { text-align: center; color: var(--text-muted); padding: 40px 0; }
+    .empty-state p { margin-top: 8px; }
   `]
 })
 export class PresenceComponent implements OnInit {
   http = inject(HttpClient);
   auth = inject(AuthService);
-  get api() { return environment.apiUrl; }
 
   loading = signal(false);
-  openSheets = signal<any[]>([]);
-  manualMemberId: Record<string, string> = {};
-  manualNote: Record<string, string> = {};
+  recap   = signal<any | null>(null);
+  view    = signal<'quart' | 'membre'>('quart');
 
-  ngOnInit() {
-    this.loadOpenSheets();
-  }
+  filterFrom = new Date(new Date().setDate(new Date().getDate() - 30))
+    .toISOString().split('T')[0];
+  filterTo = new Date().toISOString().split('T')[0];
 
-  loadOpenSheets() {
+  ngOnInit() { this.load(); }
+
+  load() {
+    const factoryId = this.auth.currentFactory()?.id;
+    if (!factoryId) return;
     this.loading.set(true);
-    this.http.get<any[]>(`${this.api}/rh/presence/chef/open`)
-      .subscribe({ next: s => { this.openSheets.set(s); this.loading.set(false); }, error: () => this.loading.set(false) });
+    this.http.get<any>(
+      `${environment.apiUrl}/rh/factories/${factoryId}/presences/recap`,
+      { params: { from: this.filterFrom, to: this.filterTo } }
+    ).subscribe({
+      next: r => {
+        this.recap.set(r.totalPresents + r.totalAbsents > 0 ? r : null);
+        this.loading.set(false);
+      },
+      error: () => this.loading.set(false)
+    });
   }
 
-  updateStatut(sheetId: string, memberId: string, event: Event, sheet: any) {
-    const statut = (event.target as HTMLSelectElement).value;
-    this.http.patch<any>(`${this.api}/rh/presence/sheets/${sheetId}/record`, { teamMemberId: memberId, statut })
-      .subscribe({ next: (updated) => this.openSheets.update(sheets => sheets.map(s => s.id === sheetId ? updated : s)) });
+  tauxColor(taux: number): string {
+    if (taux >= 90) return '#00C47A';
+    if (taux >= 70) return '#FFB700';
+    return '#FF4D6D';
   }
 
-  absentMembers(sheet: any): any[] {
-    return sheet.records.filter((r: any) => r.statut === 'ABSENT');
-  }
-
-  addManual(sheet: any) {
-    const memberId = this.manualMemberId[sheet.id];
-    if (!memberId) return;
-    const note = this.manualNote[sheet.id];
-    this.http.post<any>(`${this.api}/rh/presence/sheets/${sheet.id}/manual-signin`, { teamMemberId: memberId, note: note || undefined })
-      .subscribe({ next: (updated) => {
-        this.openSheets.update(sheets => sheets.map(s => s.id === sheet.id ? updated : s));
-        this.manualMemberId[sheet.id] = '';
-        this.manualNote[sheet.id] = '';
-      }});
-  }
-
-  validateSheet(sheet: any) {
-    if (!confirm('Valider définitivement cette feuille de présence ? Elle ne pourra plus être modifiée.')) return;
-    this.http.patch<any>(`${this.api}/rh/presence/sheets/${sheet.id}/validate`, {})
-      .subscribe({ next: (updated) => this.openSheets.update(sheets => sheets.map(s => s.id === sheet.id ? updated : s)) });
-  }
-
-  countByStatut(sheet: any, statut: string): number {
-    return sheet.records.filter((r: any) => r.statut === statut).length;
-  }
-
-  statutLabel(s: string): string {
-    return { PRESENT: '✅ Présent', ABSENT: '❌ Absent', LATE: '⏰ Retard', EXCUSED: '📝 Excusé' }[s] ?? s;
-  }
-
-  initials(name: string): string {
-    return name.split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase();
+  score5sColor(score: number): string {
+    if (score >= 8) return '#00C47A';
+    if (score >= 5) return '#FFB700';
+    return '#FF4D6D';
   }
 }
