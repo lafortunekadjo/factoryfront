@@ -44,7 +44,7 @@ type MachineTab = 'pannes' | 'formation' | 'config';
               🔧 Pannes
             </button>
             <button class="action-tab" [class.active]="activeTab() === 'formation'" (click)="activeTab.set('formation')">
-              📚 Info machine
+              📚 Formations
             </button>
             @if (canConfig()) {
               <button class="action-tab config-tab" [class.active]="activeTab() === 'config'" (click)="activeTab.set('config')">
@@ -125,6 +125,7 @@ type MachineTab = 'pannes' | 'formation' | 'config';
 
           <!-- ── ONGLET FORMATION ── -->
           @if (activeTab() === 'formation') {
+            <!-- En-tête machine -->
             <div class="formation-card factory-card">
               <div class="form-header">
                 <div class="form-dot" [style.background]="selectedMachineType()!.color"></div>
@@ -134,8 +135,6 @@ type MachineTab = 'pannes' | 'formation' | 'config';
               </div>
               @if (selectedMachineType()!.description) {
                 <p class="form-desc">{{ selectedMachineType()!.description }}</p>
-              } @else {
-                <p class="form-desc" style="font-style:italic;">Aucune description renseignée pour ce type de machine.</p>
               }
               <div class="form-stats">
                 <div class="stat-chip">
@@ -144,14 +143,106 @@ type MachineTab = 'pannes' | 'formation' | 'config';
                 </div>
                 <div class="stat-chip">
                   <span class="stat-val">{{ totalCauses() }}</span>
-                  <span class="stat-lbl">cause(s) documentée(s)</span>
+                  <span class="stat-lbl">cause(s)</span>
                 </div>
                 <div class="stat-chip">
                   <span class="stat-val">{{ totalActions() }}</span>
-                  <span class="stat-lbl">action(s) corrective(s)</span>
+                  <span class="stat-lbl">action(s)</span>
                 </div>
               </div>
             </div>
+
+            @if (loadingTraining()) {
+              <div class="center-msg">Chargement de la fiche formation...</div>
+            } @else if (!training()) {
+              <div class="empty-training factory-card">
+                <div style="font-size:36px">📚</div>
+                <p>Aucune fiche de formation configurée pour ce type de machine.</p>
+                <p style="font-size:12px;color:var(--text-muted);">
+                  Configurez-la dans Config → Types de machines → 📚
+                </p>
+              </div>
+            } @else {
+
+              <!-- Présentation -->
+              @if (training()!.presentation) {
+                <div class="training-block factory-card">
+                  <div class="tb-title">📋 Présentation</div>
+                  <p class="tb-content">{{ training()!.presentation }}</p>
+                </div>
+              }
+
+              <!-- Sections -->
+              @for (s of training()!.sections; track s.id) {
+                <div class="training-block factory-card" [class.t-attention]="s.niveau === 'ATTENTION'"
+                     [class.t-danger]="s.niveau === 'DANGER'">
+                  <div class="tb-header">
+                    <div class="tb-title">{{ s.titre }}</div>
+                    <span class="niveau-badge" [class]="'niveau-' + s.niveau.toLowerCase()">
+                      {{ s.niveau === 'INFO' ? 'ℹ️ Info' : s.niveau === 'ATTENTION' ? '⚠️ Attention' : '🚨 Danger' }}
+                    </span>
+                  </div>
+                  @if (s.contenu) { <p class="tb-content">{{ s.contenu }}</p> }
+                  @if (s.pointsCles?.length) {
+                    <ul class="tb-points">
+                      @for (p of s.pointsCles; track p) {
+                        <li>{{ p }}</li>
+                      }
+                    </ul>
+                  }
+                </div>
+              }
+
+              <!-- Paramètres techniques -->
+              @if (training()!.params?.length) {
+                <div class="training-block factory-card">
+                  <div class="tb-title">📐 Paramètres techniques</div>
+                  <table class="params-view-table">
+                    <thead>
+                      <tr>
+                        <th>Paramètre</th>
+                        <th class="center">Valeur nominale</th>
+                        <th class="center">Unité</th>
+                        <th class="center">Plage acceptable</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (p of training()!.params; track p.id) {
+                        <tr>
+                          <td class="param-nom">{{ p.nom }}</td>
+                          <td class="center param-val">{{ p.valeurNominale ?? '—' }}</td>
+                          <td class="center param-unite">{{ p.unite ?? '—' }}</td>
+                          <td class="center param-range">
+                            @if (p.valeurMin || p.valeurMax) {
+                              <span class="range-badge">
+                                {{ p.valeurMin ?? '?' }} – {{ p.valeurMax ?? '?' }}
+                              </span>
+                            } @else { — }
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+
+              <!-- Documents -->
+              @if (training()!.docs?.length) {
+                <div class="training-block factory-card">
+                  <div class="tb-title">📎 Documents & ressources</div>
+                  <div class="docs-grid">
+                    @for (d of training()!.docs; track d.id) {
+                      <a class="doc-card" [href]="d.url" target="_blank" rel="noopener">
+                        <span class="doc-icon">
+                          {{ d.typeDoc === 'PDF' ? '📄' : d.typeDoc === 'VIDEO' ? '🎥' : d.typeDoc === 'IMAGE' ? '🖼️' : '🔗' }}
+                        </span>
+                        <span class="doc-titre">{{ d.titre }}</span>
+                      </a>
+                    }
+                  </div>
+                </div>
+              }
+            }
           }
 
           <!-- ── ONGLET CONFIG ── -->
@@ -432,6 +523,36 @@ type MachineTab = 'pannes' | 'formation' | 'config';
     /* Divers */
     .btn-go-config { margin-top: 10px; padding: 9px 18px; border-radius: 8px; border: 1px solid var(--color-warning); color: var(--color-warning); background: none; cursor: pointer; font-size: 13px; }
     .center-msg, .empty-state { text-align: center; color: var(--text-muted); padding: 32px 0; }
+
+    /* Fiche formation */
+    .empty-training { text-align: center; padding: 32px; color: var(--text-muted); }
+    .empty-training p { margin-top: 8px; }
+    .training-block { margin-bottom: 12px; }
+    .training-block.t-attention { border-left: 4px solid var(--color-warning) !important; }
+    .training-block.t-danger { border-left: 4px solid var(--color-danger) !important; }
+    .tb-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .tb-title { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+    .tb-header .tb-title { margin-bottom: 0; }
+    .tb-content { font-size: 13px; color: var(--text-muted); line-height: 1.7; margin: 0 0 8px; white-space: pre-line; }
+    .tb-points { margin: 6px 0 0 16px; padding: 0; }
+    .tb-points li { font-size: 13px; color: var(--text-muted); margin-bottom: 4px; line-height: 1.5; }
+    .niveau-badge { padding: 3px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+    .niveau-info { background: #00C2FF22; color: var(--color-info); }
+    .niveau-attention { background: #FFB70022; color: var(--color-warning); }
+    .niveau-danger { background: #FF4D6D22; color: var(--color-danger); }
+    .params-view-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    .params-view-table th { text-align: left; padding: 8px 10px; font-size: 11px; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+    .params-view-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
+    .params-view-table tbody tr:last-child td { border-bottom: none; }
+    .center { text-align: center; }
+    .param-nom { font-weight: 600; }
+    .param-val { font-weight: 800; font-size: 15px; color: var(--factory-primary); }
+    .param-unite { color: var(--text-muted); }
+    .range-badge { background: var(--bg-card2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; font-size: 12px; }
+    .docs-grid { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .doc-card { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--bg-card2); border: 1px solid var(--border); border-radius: 8px; text-decoration: none; color: var(--text); font-size: 13px; font-weight: 600; transition: border-color 0.15s; }
+    .doc-card:hover { border-color: var(--factory-primary); color: var(--factory-primary); }
+    .doc-icon { font-size: 18px; }
   `]
 })
 export class MachinesComponent {
@@ -446,6 +567,8 @@ export class MachinesComponent {
   openSymptomId       = signal<string | null>(null);
   loading             = signal(false);
   saving              = signal(false);
+  loadingTraining     = signal(false);
+  training            = signal<any | null>(null);
   searchQuery         = '';
 
   // Config state
@@ -484,7 +607,18 @@ export class MachinesComponent {
     this.activeTab.set('pannes');
     this.openSymptomId.set(null);
     this.searchQuery = '';
+    this.training.set(null);
     this.loadSymptoms(mt.id);
+    this.loadTraining(mt.id);
+  }
+
+  loadTraining(machineTypeId: string) {
+    this.loadingTraining.set(true);
+    this.http.get<any>(`${environment.apiUrl}/machine-types/${machineTypeId}/training`)
+      .subscribe({
+        next: t => { this.training.set(t); this.loadingTraining.set(false); },
+        error: () => { this.training.set(null); this.loadingTraining.set(false); }
+      });
   }
 
   filterSymptoms() {

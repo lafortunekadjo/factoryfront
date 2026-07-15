@@ -579,6 +579,7 @@ interface UserForm {
                     <div class="entity-sub">{{ mt.code }} @if (mt.description) { · {{ mt.description }} }</div>
                   </div>
                   <div class="entity-actions">
+                    <button class="btn-icon training" (click)="openTraining(mt.id!, mt.label)">📚</button>
                     <button class="btn-icon edit" (click)="mt._editing = true">✏️</button>
                     <button class="btn-icon del"  (click)="deleteMachineType(i)">🗑️</button>
                   </div>
@@ -623,6 +624,123 @@ interface UserForm {
           }
 
           <!-- Instances de machines sur les lignes -->
+          <!-- ── PANNEAU FORMATION ── -->
+          @if (trainingMachineTypeId()) {
+            <div class="training-panel factory-card" style="margin-top:16px;">
+              <div class="training-header">
+                <div>
+                  <div class="training-title">📚 Formation — {{ trainingMachineTypeLabel() }}</div>
+                  <div class="training-sub">Ces informations seront visibles par tous les utilisateurs dans le module Machine</div>
+                </div>
+                <button class="btn-icon" (click)="trainingMachineTypeId.set(null)">✕</button>
+              </div>
+
+              <!-- Présentation générale -->
+              <div style="margin-top:14px;">
+                <label class="factory-label">Présentation générale</label>
+                <textarea class="factory-input" [(ngModel)]="trainingForm.presentation"
+                          rows="4" placeholder="Description générale de la machine, contexte d'utilisation..."></textarea>
+              </div>
+
+              <!-- ── Sections ── -->
+              <div class="training-section-title">
+                📋 Sections de formation
+                <button class="btn-add-training" (click)="addTrainingSection()">+ Section</button>
+              </div>
+
+              @for (s of trainingForm.sections; track $index; let i = $index) {
+                <div class="training-section-card" [class.danger]="s.niveau === 'DANGER'"
+                     [class.attention]="s.niveau === 'ATTENTION'">
+                  <div class="ts-row">
+                    <input class="factory-input" [(ngModel)]="s.titre"
+                           placeholder="Titre de la section (ex: Démarrage, Arrêt d'urgence...)"
+                           style="flex:1;" />
+                    <select class="factory-input niveau-select" [(ngModel)]="s.niveau">
+                      <option value="INFO">ℹ️ Info</option>
+                      <option value="ATTENTION">⚠️ Attention</option>
+                      <option value="DANGER">🚨 Danger</option>
+                    </select>
+                    <button class="btn-icon del" (click)="removeTrainingSection(i)">🗑️</button>
+                  </div>
+                  <textarea class="factory-input" [(ngModel)]="s.contenu"
+                            rows="3" placeholder="Contenu de la section..."
+                            style="margin-top:6px;"></textarea>
+                  <div style="margin-top:6px;">
+                    <label class="factory-label" style="font-size:11px;">Points clés (un par ligne)</label>
+                    <textarea class="factory-input" rows="3"
+                              [value]="s.pointsCles.join('\n')"
+                              (input)="updatePointsCles(i, $event)"
+                              placeholder="Point 1&#10;Point 2&#10;Point 3"></textarea>
+                  </div>
+                </div>
+              }
+
+              <!-- ── Paramètres techniques ── -->
+              <div class="training-section-title">
+                📐 Paramètres techniques
+                <button class="btn-add-training" (click)="addTrainingParam()">+ Paramètre</button>
+              </div>
+
+              @if (trainingForm.params.length > 0) {
+                <table class="params-table">
+                  <thead>
+                    <tr>
+                      <th>Paramètre</th>
+                      <th>Valeur nominale</th>
+                      <th>Unité</th>
+                      <th>Min</th>
+                      <th>Max</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (p of trainingForm.params; track $index; let i = $index) {
+                      <tr>
+                        <td><input class="factory-input" [(ngModel)]="p.nom" placeholder="ex: Pression P1" /></td>
+                        <td><input class="factory-input" [(ngModel)]="p.valeurNominale" placeholder="ex: 4.5" /></td>
+                        <td><input class="factory-input" [(ngModel)]="p.unite" placeholder="ex: bar" /></td>
+                        <td><input class="factory-input" [(ngModel)]="p.valeurMin" placeholder="4.0" /></td>
+                        <td><input class="factory-input" [(ngModel)]="p.valeurMax" placeholder="5.0" /></td>
+                        <td><button class="btn-icon del" (click)="removeTrainingParam(i)">🗑️</button></td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+
+              <!-- ── Documents ── -->
+              <div class="training-section-title">
+                📎 Documents & liens
+                <button class="btn-add-training" (click)="addTrainingDoc()">+ Document</button>
+              </div>
+
+              @for (d of trainingForm.docs; track $index; let i = $index) {
+                <div class="doc-row">
+                  <select class="factory-input doc-type" [(ngModel)]="d.typeDoc">
+                    <option value="PDF">📄 PDF</option>
+                    <option value="VIDEO">🎥 Vidéo</option>
+                    <option value="IMAGE">🖼️ Image</option>
+                    <option value="LIEN">🔗 Lien</option>
+                  </select>
+                  <input class="factory-input" [(ngModel)]="d.titre"
+                         placeholder="Titre du document" style="flex:1;" />
+                  <input class="factory-input" [(ngModel)]="d.url"
+                         placeholder="URL ou chemin..." style="flex:2;" />
+                  <button class="btn-icon del" (click)="removeTrainingDoc(i)">🗑️</button>
+                </div>
+              }
+
+              <!-- Bouton save -->
+              <div style="margin-top:16px; display:flex; justify-content:flex-end; gap:8px;">
+                <button class="btn-cancel" (click)="trainingMachineTypeId.set(null)">Fermer</button>
+                <button class="btn-factory-primary" [disabled]="savingTraining()"
+                        (click)="saveTraining()">
+                  {{ savingTraining() ? '⏳...' : '💾 Enregistrer la formation' }}
+                </button>
+              </div>
+            </div>
+          }
+
           <div class="section-header" style="margin-top:20px;">
             <div class="cs-title" style="font-size:14px;">🔩 Machines sur les lignes</div>
             <button class="btn-add-inline" (click)="addLineMachine()">+ Associer</button>
@@ -1576,6 +1694,26 @@ interface UserForm {
     .entity-actions { display: flex; gap: 4px; flex-shrink: 0; }
     .btn-icon { background: none; border: none; cursor: pointer; padding: 5px 7px; border-radius: 6px; font-size: 15px; opacity: 0.6; transition: opacity 0.15s; }
     .btn-icon:hover { opacity: 1; background: var(--bg-card2); }
+    .btn-icon.training { color: var(--factory-secondary); opacity: 0.8; }
+
+    /* Formation */
+    .training-panel { border: 2px solid var(--factory-secondary) !important; }
+    .training-header { display: flex; justify-content: space-between; align-items: flex-start; }
+    .training-title { font-size: 15px; font-weight: 700; }
+    .training-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .training-section-title { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 700; margin: 16px 0 8px; padding-top: 14px; border-top: 1px solid var(--border); }
+    .btn-add-training { padding: 4px 12px; border-radius: 6px; border: 1px dashed var(--factory-secondary); background: none; color: var(--factory-secondary); cursor: pointer; font-size: 12px; font-weight: 600; }
+    .training-section-card { background: var(--bg-card2); border-radius: 8px; padding: 12px; margin-bottom: 8px; border-left: 3px solid var(--color-info); }
+    .training-section-card.attention { border-left-color: var(--color-warning); }
+    .training-section-card.danger { border-left-color: var(--color-danger); }
+    .ts-row { display: flex; gap: 8px; align-items: center; }
+    .niveau-select { width: 130px !important; flex-shrink: 0; }
+    .params-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 8px; }
+    .params-table th { background: var(--bg-card2); padding: 7px 8px; text-align: left; font-size: 11px; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+    .params-table td { padding: 5px 4px; border-bottom: 1px solid var(--border); }
+    .params-table td input { padding: 5px 8px !important; font-size: 12px !important; }
+    .doc-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+    .doc-type { width: 110px !important; flex-shrink: 0; }
 
     /* Edit form inside card */
     .edit-form { padding-top: 4px; }
@@ -1958,7 +2096,6 @@ export class ConfigComponent implements OnInit {
     this.lossCausesForm = this.config.lossCauses().map(l => ({ ...l }));
   }
 
-  
   switchTab(tab: ConfigTab) {
     this.activeTab.set(tab);
     if (tab === 'lines')     this.loadLines();
@@ -2021,9 +2158,7 @@ export class ConfigComponent implements OnInit {
   }
 
   // ── Stop types / Loss causes ──────────────────────────────
-  // ── Stop types / Loss causes ──────────────────────────────
-   // ── Stop types / Loss causes ──────────────────────────────
-  saveStopTypes() {
+ saveStopTypes() {
   if (!this.factoryId) return;
   const existing = this.stopTypesForm.filter(st => st.id);
   const created  = this.stopTypesForm.filter(st => !st.id);
@@ -2072,6 +2207,7 @@ saveLossCauses() {
     error: () => this.showError()
   });
 }
+
 
   // ── Lignes ────────────────────────────────────────────────
   loadLines() {
@@ -2873,6 +3009,78 @@ saveLossCauses() {
     if (!confirm('Supprimer ce type de perte ?')) return;
     this.http.delete(`${this.api}/pertes/types/${id}`)
       .subscribe({ next: () => { this.lossTypes = this.lossTypes.filter(t => t.id !== id); this.showSaved(); }, error: () => this.showError() });
+  }
+
+  // ── Formation machine ─────────────────────────────────────
+  trainingMachineTypeId    = signal<string | null>(null);
+  trainingMachineTypeLabel = signal<string>('');
+  savingTraining           = signal(false);
+  trainingForm: {
+    presentation: string;
+    sections: Array<{ titre: string; contenu: string; pointsCles: string[]; niveau: string }>;
+    params: Array<{ nom: string; valeurNominale: string; unite: string; valeurMin: string; valeurMax: string }>;
+    docs: Array<{ titre: string; url: string; typeDoc: string }>;
+  } = { presentation: '', sections: [], params: [], docs: [] };
+
+  openTraining(machineTypeId: string, label: string) {
+    this.trainingMachineTypeId.set(machineTypeId);
+    this.trainingMachineTypeLabel.set(label);
+    this.trainingForm = { presentation: '', sections: [], params: [], docs: [] };
+    // Charger la formation existante
+    this.http.get<any>(`${this.api}/machine-types/${machineTypeId}/training`).subscribe({
+      next: t => {
+        this.trainingForm = {
+          presentation: t.presentation ?? '',
+          sections: t.sections.map((s: any) => ({
+            titre: s.titre, contenu: s.contenu ?? '',
+            pointsCles: s.pointsCles ?? [], niveau: s.niveau ?? 'INFO'
+          })),
+          params: t.params.map((p: any) => ({
+            nom: p.nom, valeurNominale: p.valeurNominale ?? '',
+            unite: p.unite ?? '', valeurMin: p.valeurMin ?? '', valeurMax: p.valeurMax ?? ''
+          })),
+          docs: t.docs.map((d: any) => ({
+            titre: d.titre, url: d.url, typeDoc: d.typeDoc ?? 'LIEN'
+          }))
+        };
+      },
+      error: () => {} // 404 = pas encore de formation, formulaire vide
+    });
+  }
+
+  addTrainingSection() {
+    this.trainingForm.sections.push({ titre: '', contenu: '', pointsCles: [], niveau: 'INFO' });
+  }
+  removeTrainingSection(i: number) { this.trainingForm.sections.splice(i, 1); }
+
+  addTrainingParam() {
+    this.trainingForm.params.push({ nom: '', valeurNominale: '', unite: '', valeurMin: '', valeurMax: '' });
+  }
+  removeTrainingParam(i: number) { this.trainingForm.params.splice(i, 1); }
+
+  addTrainingDoc() {
+    this.trainingForm.docs.push({ titre: '', url: '', typeDoc: 'LIEN' });
+  }
+  removeTrainingDoc(i: number) { this.trainingForm.docs.splice(i, 1); }
+
+  updatePointsCles(i: number, event: Event) {
+    const val = (event.target as HTMLTextAreaElement).value;
+    this.trainingForm.sections[i].pointsCles = val.split('\n').filter(l => l.trim());
+  }
+
+  saveTraining() {
+    const id = this.trainingMachineTypeId();
+    if (!id) return;
+    this.savingTraining.set(true);
+    this.http.put<any>(`${this.api}/machine-types/${id}/training`, {
+      presentation: this.trainingForm.presentation || undefined,
+      sections: this.trainingForm.sections.map((s, i) => ({ ...s, ordre: i })),
+      params: this.trainingForm.params.map((p, i) => ({ ...p, ordre: i })),
+      docs: this.trainingForm.docs.map((d, i) => ({ ...d, ordre: i }))
+    }).subscribe({
+      next: () => { this.savingTraining.set(false); this.showSaved(); },
+      error: () => { this.savingTraining.set(false); this.showError(); }
+    });
   }
 
   // ── Feedback ──────────────────────────────────────────────
