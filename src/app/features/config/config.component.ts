@@ -2119,6 +2119,7 @@ export class ConfigComponent implements OnInit {
         this.brandForm.modules[m.key]
       ])
     );
+    console.log(modules)
     this.http.patch(`${this.api}/factories/${this.factoryId}`, { ...this.brandForm, ...modules })
       .subscribe({ next: () => { this.config.applyThemeToDocument(); this.showSaved(); }, error: () => this.showError() });
   }

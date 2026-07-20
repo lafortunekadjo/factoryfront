@@ -239,6 +239,7 @@ export class ShellComponent {
 
   private allNavItems: (NavItem & { shortLabel?: string })[] = [
     { id: 'home',        icon: '🏠', label: 'Accueil',     shortLabel: 'Accueil',  route: '/dashboard' },
+    { id: 'my-dash',     icon: '👤', label: 'Mon espace',  shortLabel: 'Moi',      route: '/my-dashboard' },
     { id: 'machines',    icon: '🔧', label: 'Machines',    shortLabel: 'Machines', route: '/machines',     module: 'machines',     permission: 'MACHINES_READ' },
     { id: 'soufflage',   icon: '💨', label: 'Soufflage',   shortLabel: 'Soufflage',route: '/soufflage',    module: 'soufflage',    permission: 'SOUFFLAGE_READ' },
     { id: 'quart',       icon: '📋', label: 'Quart',       shortLabel: 'Quart',    route: '/quart',        module: 'quart',        permission: 'QUART_READ' },
@@ -246,8 +247,8 @@ export class ShellComponent {
     { id: 'maintenance', icon: '🛠️', label: 'Maintenance', shortLabel: 'Maint.',   route: '/maintenance',  module: 'maintenance',  permission: 'MAINTENANCE_READ' },
     { id: 'siroperie',   icon: '🧪', label: 'Siroperie',   shortLabel: 'Sirop',    route: '/siroperie',    module: 'siroperie',    permission: 'SIROPERIE_READ' },
     { id: 'bilan',       icon: '📊', label: 'Bilan',       shortLabel: 'Bilan',    route: '/bilan',        module: 'bilan',        permission: 'BILAN_READ' },
-    { id: 'rh',          icon: '👥', label: 'RH',          shortLabel: 'RH',       route: '/rh' },
-    { id: 'presence',    icon: '✅', label: 'Présences',   shortLabel: 'Présen.',  route: '/presence' },
+    { id: 'rh',          icon: '👥', label: 'RH',          shortLabel: 'RH',       route: '/rh',           module: 'rh', permission: 'EQUIPES_READ' },
+    { id: 'presence',    icon: '✅', label: 'Présences',   shortLabel: 'Présen.',  route: '/presence',     module: 'rh',           permission: 'PRESENCE_READ' },
     { id: 'config',      icon: '⚙️', label: 'Config',      shortLabel: 'Config',   route: '/config',       permission: 'CONFIG_WRITE' },
   ];
 

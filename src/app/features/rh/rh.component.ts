@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { RhApiService } from '../../core/services/api.services';
 import { AuthService } from '../../core/services/auth.service';
+import { FactoryConfigService } from '../../core/services/factory-config.service';
+import { PrintService } from '../../core/services/print.service';
 import { LineSelectorComponent } from '../../shared/components/line-selector/line-selector.component';
 import { ProductionLine, PlanningEntry, PresenceSheet, PresenceBilan, ShiftExchange } from '../../core/models/models';
 import { environment } from '../../../environments/environment';
@@ -43,23 +45,108 @@ type RhTab = 'planning' | 'presences' | 'echanges' | 'bilan';
             <div class="section-header">
               <div>
                 <div class="section-title">📅 Planning de rotation</div>
-                <div class="section-desc">Visualisez et générez le planning des équipes</div>
+                @if (cycleInfo()) {
+                  <div class="cycle-badge">
+                    Cycle : {{ cycleInfo()!.cycleLength }} jours · {{ cycleInfo()!.nbEquipes }} équipes · {{ cycleInfo()!.reposMode }}
+                  </div>
+                }
               </div>
               <div class="header-actions">
+                <!-- Nav semaine -->
                 <div class="week-nav">
                   <button class="nav-btn" (click)="prevWeek()">‹</button>
                   <span class="week-label">{{ weekLabel() }}</span>
                   <button class="nav-btn" (click)="nextWeek()">›</button>
                 </div>
-                <button class="btn-generate" (click)="generatePlanning()" [disabled]="generating()">
-                  {{ generating() ? '⏳ Génération...' : '⚡ Générer' }}
+                <!-- Actions export -->
+                <button class="btn-export" (click)="showExportForm.set(!showExportForm()); showGenForm.set(false)">
+                  📤 Exporter
+                </button>
+                <!-- Générer -->
+                <button class="btn-generate" (click)="showGenForm.set(!showGenForm()); showExportForm.set(false)">
+                  ⚡ {{ showGenForm() ? 'Annuler' : 'Générer' }}
                 </button>
               </div>
             </div>
 
+            <!-- ── Formulaire génération ── -->
+            @if (showGenForm()) {
+              <div class="gen-form factory-card">
+                <div class="gen-title">Générer le planning</div>
+
+                <div class="gen-row">
+                  <div>
+                    <label class="factory-label">Date de début</label>
+                    <input class="factory-input" type="date" [ngModel]="genFrom()"
+                           (ngModelChange)="genFrom.set($event)" />
+                  </div>
+                  <div>
+                    <label class="factory-label">Date de fin</label>
+                    <input class="factory-input" type="date" [ngModel]="genTo()"
+                           (ngModelChange)="genTo.set($event)" />
+                  </div>
+                  <div class="gen-info">
+                    @if (genNbJours() > 0 && cycleInfo()) {
+                      <div class="gen-days">{{ genNbJours() }} jours</div>
+                      @if (genNbJours() % cycleInfo()!.cycleLength === 0) {
+                        <div class="gen-ok">✅ Multiple du cycle ({{ genNbJours() / cycleInfo()!.cycleLength }}x)</div>
+                      } @else {
+                        <div class="gen-err">
+                          ❌ Doit être multiple de {{ cycleInfo()!.cycleLength }}<br>
+                          <span class="gen-suggest">
+                            Suggéré : {{ genSuggestLow() }} ou {{ genSuggestHigh() }} jours
+                          </span>
+                        </div>
+                      }
+                    }
+                  </div>
+                </div>
+
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
+                  <button class="btn-cancel" (click)="showGenForm.set(false)">Annuler</button>
+                  <button class="btn-factory-primary"
+                          [disabled]="generating() || !canGenerate()"
+                          (click)="generatePlanning()">
+                    {{ generating() ? '⏳ Génération...' : '⚡ Générer le planning' }}
+                  </button>
+                </div>
+              </div>
+            }
+
+            <!-- ── Panneau export ── -->
+            @if (showExportForm()) {
+              <div class="gen-form factory-card">
+                <div class="gen-title">📤 Exporter le planning</div>
+                <div class="gen-row">
+                  <div>
+                    <label class="factory-label">Du</label>
+                    <input class="factory-input" type="date" [ngModel]="exportFrom()"
+                           (ngModelChange)="exportFrom.set($event)" />
+                  </div>
+                  <div>
+                    <label class="factory-label">Au</label>
+                    <input class="factory-input" type="date" [ngModel]="exportTo()"
+                           (ngModelChange)="exportTo.set($event)" />
+                  </div>
+                </div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+                  <button class="btn-cancel" (click)="showExportForm.set(false)">Annuler</button>
+                  <button class="btn-export" [disabled]="exportingPlanning()"
+                          (click)="exportPlanningExcel()">
+                    📥 Excel
+                  </button>
+                  <button class="btn-export" style="border-color:var(--factory-primary);color:var(--factory-primary);"
+                          [disabled]="exportingPlanning()"
+                          (click)="exportPlanningPdf()">
+                    🖨️ PDF
+                  </button>
+                </div>
+              </div>
+            }
+
             @if (loadingPlanning()) { <div class="loading-msg">Chargement...</div> }
 
-            <!-- Grille planning -->
+            <!-- ── Grille planning ── -->
             @if (planningGrid().length) {
               <div class="planning-wrap">
                 <table class="planning-table">
@@ -70,7 +157,7 @@ type RhTab = 'planning' | 'presences' | 'echanges' | 'bilan';
                         <th class="th-day" [class.today]="isToday(day)">
                           <div class="day-name">{{ day | date:'EEE':'':'fr' }}</div>
                           <div class="day-num" [class.today-num]="isToday(day)">
-                            {{ day | date:'dd' }}
+                            {{ day | date:'dd/MM' }}
                           </div>
                         </th>
                       }
@@ -85,18 +172,38 @@ type RhTab = 'planning' | 'presences' | 'echanges' | 'bilan';
                         </td>
                         @for (entry of row.entries; track entry?.date) {
                           <td class="td-cell" [class.repos]="entry?.isRepos || !entry"
-                              [class.today-col]="entry && isToday(entry.date)">
-                            @if (entry && !entry.isRepos) {
-                              <div class="shift-cell" [style.background]="entry.equipeCouleur + '22'"
-                                   [style.color]="entry.equipeCouleur"
-                                   (click)="openPresenceSheet(entry)">
-                                <div class="shift-short">{{ entry.shiftShortName || entry.shiftName }}</div>
-                                @if (entry.locked) { <span class="lock-icon">🔒</span> }
+                              [class.today-col]="entry && isToday(entry.date)"
+                              [class.editing]="editingEntryId() === entry?.id">
+
+                            @if (editingEntryId() === entry?.id) {
+                              <!-- Mode édition inline -->
+                              <div class="edit-cell">
+                                <select class="edit-shift-select"
+                                        [(ngModel)]="editShiftId"
+                                        (change)="editIsRepos = false">
+                                  <option value="">-- Repos --</option>
+                                  @for (s of shifts(); track s.id) {
+                                    <option [value]="s.id">{{ s.shortName || s.name }}</option>
+                                  }
+                                </select>
+                                <div class="edit-cell-actions">
+                                  <button class="ec-btn save" (click)="saveEntryEdit(entry!.id)">✓</button>
+                                  <button class="ec-btn cancel" (click)="editingEntryId.set(null)">✕</button>
+                                </div>
                               </div>
-                            } @else if (entry?.isRepos) {
-                              <div class="repos-cell">R</div>
                             } @else {
-                              <div class="empty-cell">—</div>
+                              @if (entry && !entry.isRepos) {
+                                <div class="shift-cell" [style.background]="entry.equipeCouleur + '22'"
+                                     [style.color]="entry.equipeCouleur"
+                                     (click)="startEditEntry(entry)">
+                                  <div class="shift-short">{{ entry.shiftShortName || entry.shiftName }}</div>
+                                  @if (entry.locked) { <span class="lock-icon">🔒</span> }
+                                </div>
+                              } @else if (entry?.isRepos) {
+                                <div class="repos-cell" (click)="startEditEntry(entry!)">R</div>
+                              } @else {
+                                <div class="empty-cell">—</div>
+                              }
                             }
                           </td>
                         }
@@ -106,17 +213,16 @@ type RhTab = 'planning' | 'presences' | 'echanges' | 'bilan';
                 </table>
               </div>
 
-              <!-- Légende -->
               <div class="legend">
                 <span class="legend-item"><span class="legend-dot repos"></span> Repos</span>
-                <span class="legend-item"><span class="legend-dot lock">🔒</span> Présences validées</span>
-                <span class="legend-item info">Cliquez sur un quart pour valider les présences</span>
+                <span class="legend-item"><span class="legend-dot lock">🔒</span> Validé</span>
+                <span class="legend-item info">Cliquez sur une cellule pour la modifier</span>
               </div>
             } @else if (!loadingPlanning()) {
               <div class="empty-state">
                 <div style="font-size:40px">📅</div>
-                <p>Aucun planning généré pour cette semaine</p>
-                <button class="btn-generate" (click)="generatePlanning()">⚡ Générer maintenant</button>
+                <p>Aucun planning pour cette semaine</p>
+                <button class="btn-generate" (click)="showGenForm.set(true)">⚡ Générer maintenant</button>
               </div>
             }
           </div>
@@ -331,6 +437,28 @@ type RhTab = 'planning' | 'presences' | 'echanges' | 'bilan';
     .week-label { font-size: 13px; font-weight: 600; min-width: 120px; text-align: center; }
     .btn-generate { padding: 8px 16px; border-radius: 8px; background: var(--factory-secondary); color: #fff; border: none; cursor: pointer; font-size: 13px; font-weight: 700; }
     .btn-generate:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-export { padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card2); color: var(--text-muted); cursor: pointer; font-size: 12px; font-weight: 600; }
+    .cycle-badge { font-size: 11px; color: var(--factory-secondary); background: var(--bg-card2); border: 1px solid var(--border); padding: 2px 10px; border-radius: 8px; display: inline-block; margin-top: 4px; }
+
+    /* Formulaire génération */
+    .gen-form { margin-bottom: 14px; }
+    .gen-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+    .gen-row { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+    .gen-row > div { flex: 1; min-width: 140px; }
+    .gen-info { display: flex; flex-direction: column; justify-content: flex-end; padding-bottom: 4px; }
+    .gen-days { font-size: 13px; font-weight: 700; color: var(--factory-primary); }
+    .gen-ok { font-size: 12px; color: var(--color-success); margin-top: 3px; }
+    .gen-err { font-size: 12px; color: var(--color-danger); margin-top: 3px; line-height: 1.4; }
+    .gen-suggest { font-size: 11px; color: var(--text-muted); }
+
+    /* Édition cellule planning */
+    .editing .shift-cell, .editing .repos-cell { display: none; }
+    .edit-cell { display: flex; flex-direction: column; gap: 4px; padding: 2px; }
+    .edit-shift-select { font-size: 10px; padding: 3px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); width: 100%; }
+    .edit-cell-actions { display: flex; gap: 3px; }
+    .ec-btn { flex: 1; padding: 3px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 700; }
+    .ec-btn.save { background: #00E5A022; color: var(--color-success); }
+    .ec-btn.cancel { background: #FF4D6D22; color: var(--color-danger); }
 
     .planning-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
     .planning-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -484,9 +612,11 @@ type RhTab = 'planning' | 'presences' | 'echanges' | 'bilan';
   `]
 })
 export class RhComponent {
-  rh    = inject(RhApiService);
-  auth  = inject(AuthService);
-  http  = inject(HttpClient);
+  rh       = inject(RhApiService);
+  auth     = inject(AuthService);
+  config   = inject(FactoryConfigService);
+  http     = inject(HttpClient);
+  printSvc = inject(PrintService);
 
   selectedLine     = signal<ProductionLine | null>(null);
   activeTab        = signal<RhTab>('planning');
@@ -496,6 +626,37 @@ export class RhComponent {
   validating       = signal(false);
   submitting5s     = signal(false);
   showAddAbsent    = signal(false);
+
+  // Planning enrichi
+  showExportForm   = signal(false);
+  showGenForm      = signal(false);
+  exportingPlanning = signal(false);
+  exportFrom = signal(new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0]);
+  exportTo   = signal(new Date().toISOString().split('T')[0]);
+  cycleInfo        = signal<any | null>(null);
+  editingEntryId   = signal<string | null>(null);
+  editShiftId      = '';
+  editIsRepos      = false;
+  genFrom = signal(new Date().toISOString().split('T')[0]);
+  genTo   = signal(new Date(new Date().setDate(new Date().getDate() + 27)).toISOString().split('T')[0]);
+
+  genNbJours = computed(() => {
+    if (!this.genFrom() || !this.genTo()) return 0;
+    const d = new Date(this.genTo()).getTime() - new Date(this.genFrom()).getTime();
+    return Math.round(d / 86400000) + 1;
+  });
+  genSuggestLow = computed(() => {
+    const c = this.cycleInfo()?.cycleLength ?? 1;
+    return Math.floor(this.genNbJours() / c) * c;
+  });
+  genSuggestHigh = computed(() => {
+    const c = this.cycleInfo()?.cycleLength ?? 1;
+    return (Math.floor(this.genNbJours() / c) + 1) * c;
+  });
+  canGenerate = computed(() => {
+    const c = this.cycleInfo()?.cycleLength;
+    return c && this.genNbJours() > 0 && this.genNbJours() % c === 0;
+  });
 
   planningEntries  = signal<PlanningEntry[]>([]);
   activeSheet      = signal<PresenceSheet | null>(null);
@@ -552,15 +713,25 @@ export class RhComponent {
     return `${fmt(from)} – ${fmt(to)}`;
   });
 
+  shifts = this.config.shifts;
+
   planningGrid = computed(() => {
     const entries = this.planningEntries();
     const days = this.weekDays();
-    const byEquipe = new Map<string, { equipeId: string; equipeNom: string; couleur: string; entries: (PlanningEntry | null)[] }>();
+    const byEquipe = new Map<string, {
+      equipeId: string; equipeNom: string; couleur: string;
+      entries: (any | null)[]; membres: any[];
+    }>();
     for (const e of entries) {
       if (!byEquipe.has(e.equipeId)) {
-        byEquipe.set(e.equipeId, { equipeId: e.equipeId, equipeNom: e.equipeNom, couleur: e.equipeCouleur, entries: new Array(7).fill(null) });
+        byEquipe.set(e.equipeId, {
+          equipeId: e.equipeId, equipeNom: e.equipeNom, couleur: e.equipeCouleur,
+          entries: new Array(7).fill(null),
+          membres: (e as any).membres ?? []
+        });
       }
-      const idx = days.indexOf(e.date);
+      const dateStr = typeof e.date === 'string' ? e.date : String(e.date);
+      const idx = days.indexOf(dateStr);
       if (idx >= 0) byEquipe.get(e.equipeId)!.entries[idx] = e;
     }
     return Array.from(byEquipe.values());
@@ -573,6 +744,9 @@ export class RhComponent {
   onLineSelected(line: ProductionLine) {
     this.selectedLine.set(line);
     this.loadPlanning();
+    // Charger les infos du cycle pour validation
+    this.http.get<any>(`${environment.apiUrl}/rh/lines/${line.id}/cycle-info`)
+      .subscribe({ next: c => this.cycleInfo.set(c), error: () => this.cycleInfo.set(null) });
   }
 
   switchTab(tab: RhTab) {
@@ -586,8 +760,19 @@ export class RhComponent {
     const line = this.selectedLine();
     if (!line) return;
     this.loadingPlanning.set(true);
-    const days = this.weekDays();
-    this.rh.getPlanning(line.id, days[0], days[6]).subscribe({
+
+    // Calculer les jours directement depuis weekStart (évite le décalage signal)
+    const ws = this.weekStart();
+    const from = new Date(ws);
+    const to = new Date(ws);
+    to.setDate(to.getDate() + 6);
+    const fromStr = from.toISOString().split('T')[0];
+    const toStr   = to.toISOString().split('T')[0];
+
+    this.http.get<any[]>(
+      `${environment.apiUrl}/rh/lines/${line.id}/planning`,
+      { params: { from: fromStr, to: toStr } }
+    ).subscribe({
       next: e => { this.planningEntries.set(e); this.loadingPlanning.set(false); },
       error: () => this.loadingPlanning.set(false)
     });
@@ -595,13 +780,197 @@ export class RhComponent {
 
   generatePlanning() {
     const line = this.selectedLine();
-    if (!line) return;
+    if (!line || !this.canGenerate()) return;
     this.generating.set(true);
-    const days = this.weekDays();
-    this.rh.generatePlanning(line.id, days[0], days[6]).subscribe({
-      next: e => { this.planningEntries.set(e); this.generating.set(false); },
-      error: () => this.generating.set(false)
+    this.http.post<any[]>(
+      `${environment.apiUrl}/rh/lines/${line.id}/planning/generate`,
+      { from: this.genFrom(), to: this.genTo() }
+    ).subscribe({
+      next: entries => {
+        // Synchroniser la vue sur le début de la période générée
+        this.weekStart.set(this.getMonday(new Date(this.genFrom())));
+        this.planningEntries.set(entries);
+        this.generating.set(false);
+        this.showGenForm.set(false);
+        // Recharger la semaine visible
+        this.loadPlanning();
+      },
+      error: (err) => {
+        alert(err.error?.message ?? 'Erreur lors de la génération');
+        this.generating.set(false);
+      }
     });
+  }
+
+  startEditEntry(entry: any) {
+    if (entry.locked) return;
+    this.editingEntryId.set(entry.id);
+    this.editShiftId = entry.shiftConfigId ?? '';
+    this.editIsRepos = entry.isRepos ?? false;
+  }
+
+  saveEntryEdit(entryId: string) {
+    const isRepos = !this.editShiftId;
+    this.http.patch<any>(
+      `${environment.apiUrl}/rh/planning/${entryId}`,
+      { shiftConfigId: this.editShiftId || null, isRepos }
+    ).subscribe({
+      next: updated => {
+        // Mettre à jour dans planningEntries
+        this.planningEntries.update(list =>
+          list.map(e => e.id === entryId ? { ...e, ...updated } : e)
+        );
+        this.editingEntryId.set(null);
+      },
+      error: () => this.editingEntryId.set(null)
+    });
+  }
+
+  exportPlanningExcel() {
+    const line = this.selectedLine();
+    if (!line) return;
+    this.exportingPlanning.set(true);
+
+    this.http.get<any[]>(
+      `${environment.apiUrl}/rh/lines/${line.id}/planning`,
+      { params: { from: this.exportFrom(), to: this.exportTo() } }
+    ).subscribe({
+      next: entries => {
+        this.exportingPlanning.set(false);
+        this.showExportForm.set(false);
+        this.buildExcelFromEntries(entries, line);
+      },
+      error: () => this.exportingPlanning.set(false)
+    });
+  }
+
+  private buildExcelFromEntries(entries: any[], line: any) {
+    // Calculer les jours de la période
+    const from = new Date(this.exportFrom());
+    const to   = new Date(this.exportTo());
+    const days: string[] = [];
+    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+      days.push(d.toISOString().split('T')[0]);
+    }
+
+    // Grouper par équipe
+    const byEquipe = new Map<string, { nom: string; couleur: string; entries: Map<string, any>; membres: any[] }>();
+    for (const e of entries) {
+      if (!byEquipe.has(e.equipeId)) {
+        byEquipe.set(e.equipeId, { nom: e.equipeNom, couleur: e.equipeCouleur,
+          entries: new Map(), membres: e.membres ?? [] });
+      }
+      byEquipe.get(e.equipeId)!.entries.set(e.date, e);
+    }
+
+    import('xlsx').then(XLSX => {
+      const rows: any[][] = [];
+      const header = ['Équipe / Membre', 'Poste',
+        ...days.map(d => new Date(d).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }))
+      ];
+      rows.push(header);
+
+      byEquipe.forEach(eq => {
+        // Ligne équipe
+        rows.push([eq.nom, '', ...days.map(d => {
+          const e = eq.entries.get(d);
+          return e ? (e.isRepos ? 'Repos' : e.shiftShortName || e.shiftName || '') : '—';
+        })]);
+        // Membres
+        (eq.membres ?? []).forEach((m: any) => {
+          rows.push([`  ${m.nom}`, m.posteNom, ...days.map(() => '')]);
+        });
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols'] = [{ wch: 25 }, { wch: 15 }, ...days.map(() => ({ wch: 11 }))];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Planning');
+      XLSX.writeFile(wb, `planning-${line.name}-${this.exportFrom()}-${this.exportTo()}.xlsx`);
+    });
+  }
+
+  exportPlanningPdf() {
+    const line = this.selectedLine();
+    if (!line) return;
+    this.exportingPlanning.set(true);
+
+    this.http.get<any[]>(
+      `${environment.apiUrl}/rh/lines/${line.id}/planning`,
+      { params: { from: this.exportFrom(), to: this.exportTo() } }
+    ).subscribe({
+      next: entries => {
+        this.exportingPlanning.set(false);
+        this.showExportForm.set(false);
+        this.buildPdfFromEntries(entries, line);
+      },
+      error: () => this.exportingPlanning.set(false)
+    });
+  }
+
+  private buildPdfFromEntries(entries: any[], line: any) {
+    const factory = this.config.factory();
+    const from = new Date(this.exportFrom());
+    const to   = new Date(this.exportTo());
+    const days: string[] = [];
+    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+      days.push(d.toISOString().split('T')[0]);
+    }
+
+    const byEquipe = new Map<string, { nom: string; couleur: string; entries: Map<string, any>; membres: any[] }>();
+    for (const e of entries) {
+      if (!byEquipe.has(e.equipeId)) {
+        byEquipe.set(e.equipeId, { nom: e.equipeNom, couleur: e.equipeCouleur,
+          entries: new Map(), membres: e.membres ?? [] });
+      }
+      byEquipe.get(e.equipeId)!.entries.set(e.date, e);
+    }
+
+    const thead = `<tr>
+      <th>Équipe / Membre</th>
+      ${days.map(d => `<th style="font-size:9px;">${new Date(d).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' })}</th>`).join('')}
+    </tr>`;
+
+    const tbody: string[] = [];
+    byEquipe.forEach(eq => {
+      tbody.push(`<tr style="background:#e8eeff;font-weight:700;">
+        <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${eq.couleur};margin-right:6px;"></span>${eq.nom}</td>
+        ${days.map(d => {
+          const e = eq.entries.get(d);
+          const val = e ? (e.isRepos ? '🛌' : e.shiftShortName || e.shiftName || '') : '—';
+          const color = e && !e.isRepos ? eq.couleur : '#999';
+          return `<td style="text-align:center;color:${color};font-size:10px;">${val}</td>`;
+        }).join('')}
+      </tr>`);
+      (eq.membres ?? []).forEach((m: any) => {
+        tbody.push(`<tr style="background:#f9f9ff;">
+          <td style="padding-left:14px;font-size:9px;color:#555;">${m.nom} <em>(${m.posteNom})</em></td>
+          ${days.map(() => '<td></td>').join('')}
+        </tr>`);
+      });
+    });
+
+    const fromLabel = new Date(this.exportFrom()).toLocaleDateString('fr-FR');
+    const toLabel   = new Date(this.exportTo()).toLocaleDateString('fr-FR');
+
+    const html = `
+      <div class="print-header">
+        <div>
+          <div class="print-title">${factory?.appTitle ?? 'Factory Diagnostic'}</div>
+          <div class="print-subtitle">Planning — ${line.name}</div>
+        </div>
+        <div class="print-meta">
+          Période : ${fromLabel} → ${toLabel}<br>
+          Imprimé le : ${new Date().toLocaleDateString('fr-FR')}
+        </div>
+      </div>
+      <table><thead>${thead}</thead><tbody>${tbody.join('')}</tbody></table>
+      <div class="print-footer">
+        <span>${factory?.appTitle ?? ''} — Confidentiel</span>
+        <span>${fromLabel} → ${toLabel}</span>
+      </div>`;
+
+    this.printSvc.print(`Planning ${line.name}`, html, true);
   }
 
   prevWeek() { this.weekStart.update(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; }); this.loadPlanning(); }

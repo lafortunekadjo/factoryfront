@@ -27,6 +27,11 @@ export const routes: Routes = [
         path: 'dashboard',
         loadComponent: () => import('./features/dashboard/dashboard.component').then(m => m.DashboardComponent)
       },
+       {
+        path: 'my-dashboard',
+        loadComponent: () => import('./features/my-dashboard/my-dashboard.component').then(m => m.MyDashboardComponent)
+      },
+
 
       // Profil utilisateur — accessible à tout utilisateur connecté
       {

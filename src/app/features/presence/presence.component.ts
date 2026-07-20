@@ -3,6 +3,7 @@ import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../core/services/auth.service';
+import { PrintService } from '../../core/services/print.service';
 import { environment } from '../../../environments/environment';
 
 @Component({
@@ -14,10 +15,19 @@ import { environment } from '../../../environments/environment';
 
       <div class="pres-header">
         <h2 class="page-title">✅ Présences</h2>
-        <div class="period-filters">
-          <input class="factory-input date-input" type="date" [(ngModel)]="filterFrom" (change)="load()" />
-          <span class="period-sep">→</span>
-          <input class="factory-input date-input" type="date" [(ngModel)]="filterTo" (change)="load()" />
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <div class="period-filters">
+            <input class="factory-input date-input" type="date" [(ngModel)]="filterFrom" (change)="load()" />
+            <span class="period-sep">→</span>
+            <input class="factory-input date-input" type="date" [(ngModel)]="filterTo" (change)="load()" />
+          </div>
+          @if (recap()) {
+            <button class="btn-print-pres" (click)="printRecap()">🖨️ Imprimer</button>
+          }
+          <button class="btn-export-pointage" [disabled]="exportingPointage()"
+                  (click)="exportPointageExcel()">
+            {{ exportingPointage() ? '⏳...' : '📥 Pointage Excel' }}
+          </button>
         </div>
       </div>
 
@@ -308,14 +318,18 @@ import { environment } from '../../../environments/environment';
 
     .center-msg, .empty-state { text-align: center; color: var(--text-muted); padding: 40px 0; }
     .empty-state p { margin-top: 8px; }
+    .btn-print-pres { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card2); color: var(--text-muted); cursor: pointer; font-size: 13px; font-weight: 600; }
+    .btn-export-pointage { padding: 7px 14px; border-radius: 8px; border: 1px solid #00875A44; background: #00875A11; color: #00875A; cursor: pointer; font-size: 13px; font-weight: 600; }
+    .btn-export-pointage:disabled { opacity: 0.5; cursor: not-allowed; }
   `]
 })
 export class PresenceComponent implements OnInit {
   http = inject(HttpClient);
   auth = inject(AuthService);
 
-  loading      = signal(false);
-  recap        = signal<any | null>(null);
+  loading          = signal(false);
+  exportingPointage = signal(false);
+  recap            = signal<any | null>(null);
   tab          = signal<'quarts' | 'membres'>('quarts');
   expandedQuart = signal<string | null>(null);
 
@@ -376,5 +390,286 @@ export class PresenceComponent implements OnInit {
     if (s >= 8) return '#00C47A';
     if (s >= 5) return '#FFB700';
     return '#FF4D6D';
+  }
+
+  printSvc = inject(PrintService);
+
+  printRecap() {
+    const r = this.recap();
+    if (!r) return;
+    const factory = this.auth.currentFactory();
+    const from = new Date(this.filterFrom).toLocaleDateString('fr-FR');
+    const to   = new Date(this.filterTo).toLocaleDateString('fr-FR');
+
+    const quartsHtml = r.parQuart.map((q: any) => {
+      const lignesHtml = q.lignes.map((l: any) => `
+        <tr>
+          <td>${l.membreNom}</td><td>${l.posteNom}</td>
+          <td><span class="badge badge-${l.present ? 'present' : 'absent'}">${l.present ? '✓' : '✗'}</span></td>
+          <td>${l.note5s !== null && l.note5s !== undefined ? l.note5s + '/10' : l.isMachineOp ? '—' : 'N/A'}</td>
+        </tr>`).join('');
+      return `
+        <tr style="background:#e8eeff;">
+          <td colspan="4" style="font-weight:700;padding:8px;">
+            📅 ${q.date} · ${q.shiftName} · ${q.equipeNom} — ${q.nbPresents}/${q.nbTotal} présents
+          </td>
+        </tr>${lignesHtml}`;
+    }).join('');
+
+    const membresHtml = r.parMembre.map((m: any) => `
+      <tr>
+        <td>${m.membreNom}</td><td>${m.posteNom}</td><td>${m.equipeNom}</td>
+        <td style="text-align:center;font-weight:700;color:green;">${m.presents}</td>
+        <td style="text-align:center;font-weight:700;color:red;">${m.absents}</td>
+        <td style="text-align:center;">${m.tauxPresence}%</td>
+        <td style="text-align:center;">${m.moyenne5s ?? '—'}</td>
+      </tr>`).join('');
+
+    const html = `
+      <div class="print-header">
+        <div>
+          <div class="print-title">${factory?.name ?? 'Factory Diagnostic'}</div>
+          <div class="print-subtitle">Récapitulatif des Présences</div>
+        </div>
+        <div class="print-meta">Période : ${from} → ${to}<br>Imprimé le : ${new Date().toLocaleDateString('fr-FR')}</div>
+      </div>
+      <div class="kpi-row">
+        <div class="kpi-box"><div class="kpi-val" style="color:green;">${r.totalPresents}</div><div class="kpi-lbl">Présences</div></div>
+        <div class="kpi-box"><div class="kpi-val" style="color:red;">${r.totalAbsents}</div><div class="kpi-lbl">Absences</div></div>
+        <div class="kpi-box"><div class="kpi-val" style="color:#1565C0;">${r.tauxPresence}%</div><div class="kpi-lbl">Taux</div></div>
+      </div>
+      <div class="section">
+        <div class="section-title">Détail par quart</div>
+        <table><thead><tr><th>Membre</th><th>Poste</th><th>Statut</th><th>Note 5S</th></tr></thead>
+        <tbody>${quartsHtml}</tbody></table>
+      </div>
+      <div class="section" style="margin-top:16px;">
+        <div class="section-title">Récapitulatif par membre</div>
+        <table><thead><tr><th>Membre</th><th>Poste</th><th>Équipe</th><th>✓</th><th>✗</th><th>Taux</th><th>Moy.5S</th></tr></thead>
+        <tbody>${membresHtml}</tbody></table>
+      </div>
+      <div class="print-footer">
+        <span>${factory?.name ?? ''} — Document généré automatiquement</span>
+        <span>Période : ${from} → ${to}</span>
+      </div>`;
+
+    this.printSvc.print(`Récap Présences ${from}-${to}`, html, true);
+  }
+
+  exportPointageExcel() {
+    const factoryId = this.auth.currentFactory()?.id;
+    if (!factoryId) return;
+    this.exportingPointage.set(true);
+
+    // Appeler l'endpoint backend qui génère le fichier via Python/openpyxl
+    this.http.get(
+      `${environment.apiUrl}/rh/factories/${factoryId}/presences/pointage/export`,
+      {
+        params: { from: this.filterFrom, to: this.filterTo },
+        responseType: 'blob'
+      }
+    ).subscribe({
+      next: (blob: Blob) => {
+        this.exportingPointage.set(false);
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `pointage-${this.filterFrom}_${this.filterTo}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => {
+        // Fallback : générer côté frontend si le backend Python n'est pas dispo
+        this.exportingPointage.set(false);
+        this.http.get<any>(
+          `${environment.apiUrl}/rh/factories/${factoryId}/presences/pointage`,
+          { params: { from: this.filterFrom, to: this.filterTo } }
+        ).subscribe({
+          next: data => this.buildPointageExcel(data),
+          error: () => {}
+        });
+      }
+    });
+  }
+
+  private buildPointageExcel(data: any) {
+    import('xlsx').then(XLSX => {
+      const jours: string[] = data.jours ?? [];
+      const membres: any[]  = data.membres ?? [];
+      const factory = this.auth.currentFactory();
+      const fromFr  = new Date(data.from).toLocaleDateString('fr-FR');
+      const toFr    = new Date(data.to).toLocaleDateString('fr-FR');
+
+      const wb = XLSX.utils.book_new();
+
+      // ── Onglet par semaine (ou unique si < 7 jours) ──────────────────────
+      // Regrouper les jours par semaine (lundi→dimanche)
+      const semaines = this.groupBySemaine(jours);
+
+      semaines.forEach((semaineJours, sIdx) => {
+        const joursFr = semaineJours.map(d =>
+          new Date(d).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' })
+        );
+        const joursNoms = semaineJours.map(d =>
+          new Date(d).toLocaleDateString('fr-FR', { weekday: 'long' })
+        );
+
+        const rows: any[][] = [];
+
+        // ── Ligne titre usine ──────────────────────────────────────────────
+        rows.push([factory?.appTitle ?? factory?.name ?? 'Factory Diagnostic']);
+        rows.push([]);
+
+        // ── Ligne mois + semaine ───────────────────────────────────────────
+        const semFrom = new Date(semaineJours[0]).toLocaleDateString('fr-FR');
+        const semTo   = new Date(semaineJours[semaineJours.length - 1]).toLocaleDateString('fr-FR');
+        rows.push(['', '', '', '', '', '', '', '', 'Mois', '',
+          new Date(semaineJours[0]).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+          '', '', '', 'Semaine :', '', '', '',
+          `Du ${semFrom} au ${semTo}`]);
+        rows.push([]);
+
+        // ── En-tête colonnes ───────────────────────────────────────────────
+        // MAT. | NOM | POSTE | ÉQUIPE | [jour N, A] x7 | PRÉSENTS | ABSENTS | TAUX
+        const headerRow1 = ['MAT.', 'NOM ET PRÉNOM', 'POSTE', 'ÉQUIPE'];
+        const headerRow2 = ['', '', '', ''];
+        joursNoms.forEach(j => {
+          headerRow1.push(j.toUpperCase(), '');
+          headerRow2.push('P', 'A');
+        });
+        headerRow1.push('Jours\nprésents', 'Jours\nabsents', 'Taux\nprésence', 'Observations');
+        headerRow2.push('', '', '', '');
+        rows.push(headerRow1);
+        rows.push(joursFr.reduce((acc: string[], d) => [...acc, d, ''], ['', '', '', ''])
+          .concat(['', '', '', '']));
+        rows.push(headerRow2);
+
+        // ── Lignes membres ─────────────────────────────────────────────────
+        let presParJour = new Array(semaineJours.length).fill(0);
+
+        membres.forEach((m: any, idx: number) => {
+          const row: any[] = [
+            String(idx + 1).padStart(3, '0'),
+            m.nom,
+            m.posteNom,
+            m.equipeNom
+          ];
+
+          let presCount = 0;
+          let absCount  = 0;
+
+          semaineJours.forEach((d, ji) => {
+            const jourData = (m.jours ?? []).find((j: any) => j.date === d);
+            const present  = jourData?.present;
+            if (present === true) {
+              row.push('P', '');
+              presCount++;
+              presParJour[ji]++;
+            } else if (present === false) {
+              row.push('', 'A');
+              absCount++;
+            } else {
+              row.push('', '');  // pas de données (hors période planning)
+            }
+          });
+
+          row.push(presCount, absCount, `${m.tauxPresence}%`, '');
+          rows.push(row);
+        });
+
+        // ── Ligne totaux ───────────────────────────────────────────────────
+        const totalRow: any[] = ['', 'TOTAUX', '', ''];
+        presParJour.forEach(p => totalRow.push(p, ''));
+        totalRow.push(
+          membres.reduce((s: number, m: any) => s + m.totalPresents, 0),
+          membres.reduce((s: number, m: any) => s + m.totalAbsents, 0),
+          '', ''
+        );
+        rows.push([]);
+        rows.push(totalRow);
+
+        // ── Ligne effectif présent ─────────────────────────────────────────
+        const effRow: any[] = ['', 'Effectif présent :', '', ''];
+        presParJour.forEach(p => effRow.push(p, ''));
+        rows.push(effRow);
+
+        rows.push([]);
+
+        // ── Légende ───────────────────────────────────────────────────────
+        rows.push([
+          'P : Présent', '', 'A : Absent', '', 'R : Récupération', '',
+          'CP : Congés payés', '', 'M : Maladie', '', 'HS : Heure Supplémentaire'
+        ]);
+        rows.push([]);
+        rows.push(['Visa Chef d\'Atelier', '', '', '', 'Visa Chef Département',
+                   '', '', '', 'Visa Directeur Technique']);
+
+        // ── Créer le worksheet ────────────────────────────────────────────
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+
+        // Largeurs colonnes
+        const ncols = 4 + semaineJours.length * 2 + 4;
+        const colWidths: any[] = [
+          { wch: 5 },  // MAT
+          { wch: 26 }, // NOM
+          { wch: 16 }, // POSTE
+          { wch: 14 }, // ÉQUIPE
+          ...semaineJours.flatMap(() => [{ wch: 4 }, { wch: 4 }]),
+          { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 18 }
+        ];
+        ws['!cols'] = colWidths;
+
+        const tabLabel = semFrom.replace(/\//g, '-');
+        XLSX.utils.book_append_sheet(wb, ws, tabLabel.substring(0, 31));
+      });
+
+      // ── Onglet récapitulatif ──────────────────────────────────────────────
+      const recapRows: any[][] = [];
+      recapRows.push([factory?.appTitle ?? 'Factory Diagnostic',
+                      `Récapitulatif présences du ${fromFr} au ${toFr}`]);
+      recapRows.push([]);
+      recapRows.push(['N°', 'NOM ET PRÉNOM', 'POSTE', 'ÉQUIPE',
+                      'Jours présents', 'Jours absents', 'Taux présence', 'Note 5S moy.']);
+
+      membres.forEach((m: any, i: number) => {
+        recapRows.push([
+          i + 1, m.nom, m.posteNom, m.equipeNom,
+          m.totalPresents, m.totalAbsents,
+          `${m.tauxPresence}%`,
+          m.moyenne5s ?? ''
+        ]);
+      });
+      recapRows.push([]);
+      recapRows.push(['', 'TOTAL', '', '',
+        membres.reduce((s: number, m: any) => s + m.totalPresents, 0),
+        membres.reduce((s: number, m: any) => s + m.totalAbsents, 0),
+        '', '']);
+
+      const wsRecap = XLSX.utils.aoa_to_sheet(recapRows);
+      wsRecap['!cols'] = [
+        { wch: 4 }, { wch: 26 }, { wch: 16 }, { wch: 14 },
+        { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }
+      ];
+      XLSX.utils.book_append_sheet(wb, wsRecap, 'Récapitulatif');
+
+      const filename = `pointage-${fromFr.replace(/\//g,'-')}_${toFr.replace(/\//g,'-')}.xlsx`;
+      XLSX.writeFile(wb, filename);
+    });
+  }
+
+  private groupBySemaine(jours: string[]): string[][] {
+    if (!jours.length) return [];
+    const semaines: string[][] = [];
+    let semaine: string[] = [];
+    jours.forEach(d => {
+      semaine.push(d);
+      const dow = new Date(d).getDay(); // 0=dim, 6=sam
+      if (dow === 0 || semaine.length === 7) { // fin de semaine le dimanche
+        semaines.push(semaine);
+        semaine = [];
+      }
+    });
+    if (semaine.length) semaines.push(semaine); // reste
+    return semaines;
   }
 }

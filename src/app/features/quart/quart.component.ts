@@ -8,6 +8,7 @@ import { LineSelectorComponent } from '../../shared/components/line-selector/lin
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 import { QuartRecord, ProductionLine, Product, ShiftConfig, StopType } from '../../core/models/models';
+import { PrintService } from '../../core/services/print.service';
 
 @Component({
   selector: 'app-quart',
@@ -130,6 +131,10 @@ import { QuartRecord, ProductionLine, Product, ShiftConfig, StopType } from '../
                 <div class="stop-dur-input">
                   <input class="factory-input" type="number" [(ngModel)]="se.durationMinutes" placeholder="min" style="width: 80px;" />
                   <span style="font-size: 12px; color: var(--text-muted);">min</span>
+                  <label class="stop-planned-toggle">
+                    <input type="checkbox" [(ngModel)]="se.isPlanned" />
+                    <span style="font-size:11px;color:var(--text-muted);">Planifié</span>
+                  </label>
                 </div>
               </div>
             }
@@ -244,6 +249,7 @@ import { QuartRecord, ProductionLine, Product, ShiftConfig, StopType } from '../
                 @if (record.canEdit) {
                   <button class="btn-edit-record" (click)="startEdit(record)">✏️ Modifier</button>
                 }
+                <button class="btn-print-record" (click)="printQuartRecord(record)">🖨️ Imprimer</button>
                 @if (isTeamLeaderOf(record)) {
                   <button class="btn-presence-record"
                           [class.validated]="presenceValidated(record.id)"
@@ -421,7 +427,7 @@ import { QuartRecord, ProductionLine, Product, ShiftConfig, StopType } from '../
     .stop-tag.selected { background: var(--factory-primary); color: #fff; border-color: transparent; }
     .stop-duration-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
     .stop-label { font-size: 13px; }
-    .stop-dur-input { display: flex; align-items: center; gap: 6px; }
+    .stop-planned-toggle { display: flex; align-items: center; gap: 4px; cursor: pointer; margin-left: 6px; }
 
     /* Form actions */
     .form-actions { display: flex; gap: 8px; margin-top: 14px; }
@@ -468,6 +474,11 @@ import { QuartRecord, ProductionLine, Product, ShiftConfig, StopType } from '../
       padding: 5px 12px; border-radius: 6px;
       background: #FFB70022; border: 1px solid #FFB70044;
       color: var(--color-warning); cursor: pointer; font-size: 12px; font-weight: 600;
+    }
+    .btn-print-record {
+      padding: 5px 12px; border-radius: 6px;
+      background: var(--bg-card2); border: 1px solid var(--border);
+      color: var(--text-muted); cursor: pointer; font-size: 12px; font-weight: 600;
     }
     .btn-presence-record {
       padding: 5px 12px; border-radius: 6px;
@@ -556,6 +567,220 @@ export class QuartComponent implements OnInit {
   auth = inject(AuthService);
   http = inject(HttpClient);
   quartApi = inject(QuartApiService);
+  printSvc = inject(PrintService);
+
+  printQuartRecord(record: QuartRecord) {
+    const factory = this.config.factory();
+    const line = this.selectedLine();
+    const date = new Date(record.productionDate).toLocaleDateString('fr-FR', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+    const dateStr = record.productionDate;
+
+    // Charger pertes, présences et interventions en parallèle
+    Promise.all([
+      this.http.get<any[]>(
+        `${environment.apiUrl}/pertes/lines/${record.productionLineId}/fiches`,
+        { params: { from: dateStr, to: dateStr } }
+      ).toPromise().catch(() => []),
+      this.http.get<any>(
+        `${environment.apiUrl}/rh/quart/${record.id}/presences`
+      ).toPromise().catch(() => null),
+      this.http.get<any[]>(
+        `${environment.apiUrl}/maintenance/lines/${record.productionLineId}/quart`,
+        { params: { date: dateStr, shiftId: record.shiftConfigId } }
+      ).toPromise().catch(() => [])
+    ]).then(([fiches, presenceSheet, interventions]) => {
+      this.buildAndPrintQuart(record, fiches ?? [], presenceSheet, interventions ?? [], date, factory, line);
+    });
+  }
+
+  private buildAndPrintQuart(record: QuartRecord, fiches: any[], presenceSheet: any,
+                              interventions: any[], date: string, factory: any, line: any) {
+    const logoHtml = factory?.logoUrl
+      ? `<img src="${factory.logoUrl}" style="height:50px;object-fit:contain;" />`
+      : `<div style="font-size:20px;font-weight:900;color:#1565C0;">${factory?.appTitle ?? ''}</div>`;
+
+    // Arrêts — depuis record.stopEvents uniquement (pas d'appel API supplémentaire)
+    const stopRows = (record.stopEvents ?? []).map((s: any) => `
+      <tr>
+        <td>${s.stopTypeLabel ?? '—'}</td>
+        <td style="text-align:center;font-weight:700;">${s.durationMinutes ?? 0} min</td>
+        <td>${s.description ?? '—'}</td>
+        <td style="text-align:center;">
+          <span style="padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;
+            background:${s.isPlanned ? '#e6fff5' : '#fff0f0'};
+            color:${s.isPlanned ? '#00875A' : '#CC0000'};">
+            ${s.isPlanned ? '✓ Planifié' : '✗ Non planifié'}
+          </span>
+        </td>
+      </tr>`).join('');
+
+    // Pertes
+    const pertesRows = (fiches ?? []).flatMap((f: any) =>
+      (f.lignes ?? []).filter((l: any) => l.quantity > 0).map((l: any) => `
+        <tr>
+          <td>${l.lossTypeNom ?? '—'}</td>
+          <td style="text-align:center;font-weight:700;">${l.quantity}</td>
+          <td>${l.lossTypeUnite ?? '—'}</td>
+          <td>${l.lossCauseLabel ?? '—'}</td>
+          <td>${l.notes ?? '—'}</td>
+        </tr>`)
+    ).join('');
+
+    // Présences
+    const presenceLignes = presenceSheet?.lignes ?? [];
+    const presenceRows = presenceLignes.map((p: any) => `
+      <tr>
+        <td>${p.membreNom}</td>
+        <td>${p.posteNom}</td>
+        <td style="text-align:center;">
+          <span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;
+            background:${p.present ? '#e6fff5' : '#fff0f0'};
+            color:${p.present ? '#00875A' : '#CC0000'};
+            border:1px solid ${p.present ? '#00E5A044' : '#FF4D6D44'};">
+            ${p.present ? '✓ Présent' : '✗ Absent'}
+          </span>
+        </td>
+        <td style="text-align:center;">${p.addedByChef ? '<span style="font-size:10px;background:#FFB70022;color:#996600;padding:1px 6px;border-radius:6px;">+ chef</span>' : ''}</td>
+        <td style="text-align:center;font-weight:700;">
+          ${p.note5s !== null && p.note5s !== undefined ? p.note5s + '/10' : p.isMachineOp ? '—' : 'N/A'}
+        </td>
+      </tr>`).join('');
+
+    const presentsCount = presenceLignes.filter((p: any) => p.present).length;
+    const totalCount = presenceLignes.length;
+
+    // Interventions maintenance
+    const sevColor: Record<string, string> = {
+      CRITIQUE: '#CC0000', MAJEUR: '#CC6600', MINEUR: '#996600'
+    };
+    const interventionRows = (interventions ?? []).map((i: any) => `
+      <tr>
+        <td>${i.machineLabel ?? '—'}</td>
+        <td>
+          <span style="padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;
+            background:${(sevColor[i.severity] ?? '#666') + '22'};
+            color:${sevColor[i.severity] ?? '#666'};">
+            ${i.severity}
+          </span>
+        </td>
+        <td>${i.maintenanceType}</td>
+        <td>${i.defectDescription ?? '—'}</td>
+        <td>${i.durationMinutes ? i.durationMinutes + ' min' : '—'}</td>
+        <td>
+          <span style="font-size:10px;padding:2px 6px;border-radius:6px;background:#eef;color:#336;">
+            ${i.status}
+          </span>
+        </td>
+      </tr>`).join('');
+
+    const html = `
+      <div class="print-header">
+        <div style="display:flex;align-items:center;gap:12px;">
+          ${logoHtml}
+          <div>
+            <div class="print-title" style="color:${line?.color ?? '#1565C0'};">
+              Fiche de Quart — ${line?.name ?? ''}
+            </div>
+            <div class="print-subtitle">
+              ${date} · Quart ${record.shiftName ?? ''} · Chef : ${record.teamLeaderName ?? '—'}
+            </div>
+          </div>
+        </div>
+        <div class="print-meta">
+          Opérateur : ${record.operatorName}<br>
+          Produit : ${record.productLabel ?? '—'}<br>
+          Imprimé le : ${new Date().toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">📦 Production</div>
+        <div class="kpi-row">
+          <div class="kpi-box">
+            <div class="kpi-val">${(record.bottlesProduced ?? 0).toLocaleString('fr-FR')}</div>
+            <div class="kpi-lbl">Bouteilles</div>
+          </div>
+          <div class="kpi-box">
+            <div class="kpi-val">${(record.packsProduced ?? 0).toLocaleString('fr-FR')}</div>
+            <div class="kpi-lbl">Packs</div>
+          </div>
+          <div class="kpi-box">
+            <div class="kpi-val">${record.palletsProduced ?? '—'}</div>
+            <div class="kpi-lbl">Palettes</div>
+          </div>
+          <div class="kpi-box">
+            <div class="kpi-val" style="color:${(record.totalDowntimeMinutes ?? 0) > 0 ? '#CC0000' : '#00875A'};">
+              ${record.totalDowntimeMinutes ?? 0} min
+            </div>
+            <div class="kpi-lbl">Temps d'arrêt</div>
+          </div>
+          <div class="kpi-box">
+            <div class="kpi-val" style="color:${presentsCount === totalCount && totalCount > 0 ? '#00875A' : '#CC6600'};">
+              ${presentsCount}/${totalCount}
+            </div>
+            <div class="kpi-lbl">Présences</div>
+          </div>
+        </div>
+      </div>
+
+      ${(record.stopEvents ?? []).length > 0 ? `
+      <div class="section">
+        <div class="section-title">🛑 Arrêts (${record.stopEvents!.length}) — Total : ${record.totalDowntimeMinutes ?? 0} min</div>
+        <table>
+          <thead><tr><th>Type</th><th>Durée</th><th>Description</th><th>Planifié</th></tr></thead>
+          <tbody>${stopRows}</tbody>
+        </table>
+      </div>` : ''}
+
+      ${presenceLignes.length > 0 ? `
+      <div class="section">
+        <div class="section-title">👥 Présences — ${presenceSheet?.equipeNom ?? ''} (${presentsCount}/${totalCount})</div>
+        <table>
+          <thead><tr><th>Membre</th><th>Poste</th><th>Statut</th><th></th><th>Note 5S</th></tr></thead>
+          <tbody>${presenceRows}</tbody>
+        </table>
+      </div>` : ''}
+
+      ${interventions?.length > 0 ? `
+      <div class="section">
+        <div class="section-title">🔧 Interventions maintenance (${interventions.length})</div>
+        <table>
+          <thead><tr><th>Machine</th><th>Sévérité</th><th>Type</th><th>Défaut constaté</th><th>Durée</th><th>Statut</th></tr></thead>
+          <tbody>${interventionRows}</tbody>
+        </table>
+      </div>` : ''}
+
+      ${fiches?.length > 0 && pertesRows ? `
+      <div class="section">
+        <div class="section-title">🗑️ Pertes déclarées</div>
+        <table>
+          <thead><tr><th>Type</th><th>Quantité</th><th>Unité</th><th>Cause</th><th>Notes</th></tr></thead>
+          <tbody>${pertesRows}</tbody>
+        </table>
+      </div>` : ''}
+
+      ${record.notes ? `
+      <div class="section">
+        <div class="section-title">📝 Notes</div>
+        <p style="font-size:12px;color:#444;line-height:1.7;white-space:pre-line;">${record.notes}</p>
+      </div>` : ''}
+
+      <div class="signatures">
+        <div class="sig-box">Chef d'équipe : ${record.teamLeaderName ?? '_________________'}<br><br>Signature :</div>
+        <div class="sig-box">Superviseur : _________________<br><br>Signature :</div>
+        <div class="sig-box">Date & heure de validation :</div>
+      </div>
+
+      <div class="print-footer">
+        <span>${factory?.appTitle ?? 'Factory Diagnostic'} — Document confidentiel</span>
+        <span>Fiche N° ${record.id?.substring(0,8).toUpperCase()}</span>
+      </div>
+    `;
+
+    this.printSvc.print(`Fiche de Quart — ${date}`, html);
+  }
 
   selectedLine = signal<ProductionLine | null>(null);
   showForm = signal(false);
@@ -565,7 +790,7 @@ export class QuartComponent implements OnInit {
   products = signal<Product[]>([]);
   dayStats = signal<any>(null);
   editingId = signal<string | null>(null);
- private validatedPresenceIds = new Set<string>();
+private validatedPresenceIds = new Set<string>();
   shifts = this.config.shifts;
   stopTypes = this.config.stopTypes;
   teamLeaders = signal<{id:string; fullName:string}[]>([]);
@@ -590,7 +815,7 @@ export class QuartComponent implements OnInit {
       bottlesProduced: null as number | null,
       packsProduced: null as number | null,
       notes: '',
-      stopEvents: [] as { stopTypeId: string; stopTypeLabel: string; durationMinutes: number | null }[]
+      stopEvents: [] as { stopTypeId: string; stopTypeLabel: string; durationMinutes: number | null; isPlanned: boolean }[]
     };
   }
 
@@ -642,7 +867,7 @@ export class QuartComponent implements OnInit {
     if (idx >= 0) {
       this.form.stopEvents.splice(idx, 1);
     } else {
-      this.form.stopEvents.push({ stopTypeId: st.id, stopTypeLabel: st.label, durationMinutes: null });
+      this.form.stopEvents.push({ stopTypeId: st.id, stopTypeLabel: st.label, durationMinutes: null, isPlanned: false });
     }
   }
 
@@ -930,8 +1155,9 @@ export class QuartComponent implements OnInit {
       notes: record.notes ?? '',
       stopEvents: (record.stopEvents ?? []).map(se => ({
         stopTypeId: se.stopTypeId ?? '',
-        stopTypeLabel: se.stopTypeLabel ?? '',
-        durationMinutes: se.durationMinutes ?? null
+        stopTypeLabel: (se as any).stopTypeLabel ?? '',
+        durationMinutes: se.durationMinutes ?? null,
+        isPlanned: (se as any).isPlanned ?? false
       }))
     };
     this.showForm.set(true);
